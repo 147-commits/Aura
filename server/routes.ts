@@ -21,6 +21,11 @@ import {
   type SkillDefinition,
   type SkillDomain,
 } from "./skill-engine";
+import {
+  routeSkills,
+  composeChainedPrompt,
+  type RouteResult,
+} from "./skill-router";
 import { generatePDF, type DocumentRequest } from "./document-engine";
 import { runResearch } from "./research-engine";
 import {
@@ -187,12 +192,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const lastUserMessage = [...messages].reverse().find((m: any) => m.role === "user")?.content || "";
 
-      let mode: ChatMode = requestedMode || "chat";
-      if (autoDetectMode && !requestedMode) {
-        mode = await detectMode(lastUserMessage, openai);
-        res.write(`data: ${JSON.stringify({ type: "mode", mode })}\n\n`);
-      }
-
+      // ─── Memory + conversation setup ───────────────────────────────
       let conversationId: string | null = null;
       let dbMemory: { text: string; category: string }[] = clientMemory;
 
@@ -202,11 +202,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dbMemory = memories.map((m: any) => ({ text: m.text, category: m.category }));
       }
 
-      // ─── Skill resolution ───────────────────────────────────────────
+      // ─── Parallel detection: mode + domain (runs simultaneously) ───
+      const detectionStart = Date.now();
+
+      const activeProjectContext = dbMemory
+        .filter((m) => m.category === "project")
+        .map((m) => m.text)
+        .join("; ")
+        .slice(0, 100);
+
+      const needsModeDetect = autoDetectMode && !requestedMode;
+
+      const [detectedMode, skillRoute] = await Promise.all([
+        needsModeDetect
+          ? detectMode(lastUserMessage, openai)
+          : Promise.resolve(requestedMode || "chat" as ChatMode),
+        routeSkills(lastUserMessage, activeProjectContext, dbMemory, openai).catch((err): RouteResult => {
+          console.warn("[skill-router] routeSkills failed, continuing without skill:", err);
+          return { primary: "engineering", secondary: null, layer: "heuristic" };
+        }),
+      ]);
+
+      let mode: ChatMode = detectedMode;
+      const detectionMs = Date.now() - detectionStart;
+
+      if (needsModeDetect) {
+        res.write(`data: ${JSON.stringify({ type: "mode", mode })}\n\n`);
+      }
+
+      // ─── Skill resolution (client override > auto-detection) ───────
       let activeSkill: SkillDefinition | undefined;
       let skillContext: SkillContext | undefined;
+      let wasAutoDetected = false;
+      let chainedPromptOverride: string | undefined;
+      let detectedSkill: {
+        primary: SkillDomain | null;
+        secondary: SkillDomain | null;
+        wasAutoDetected: boolean;
+        skillName: string | null;
+      } | null = null;
+      let routingFailed = false;
 
       if (activeSkillId) {
+        // Client explicitly selected a skill — validate it
         activeSkill = getSkill(activeSkillId);
         if (!activeSkill) {
           res.write(`data: ${JSON.stringify({ type: "error", error: "Unknown skill ID", validSkills: getAllSkillIds() })}\n\n`);
@@ -214,45 +252,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
           res.end();
           return;
         }
+        skillContext = { userMessage: lastUserMessage, chainedSkillIds: activeSkill.chainsWith };
+        detectedSkill = {
+          primary: activeSkill.domain,
+          secondary: null,
+          wasAutoDetected: false,
+          skillName: activeSkill.name,
+        };
 
-        // Build skill context — DB fetches in parallel, never block chat on failure
-        try {
-          const [projects, tasks] = await Promise.all([
-            userId ? getProjects(userId) : Promise.resolve([]),
-            userId ? getTasks(userId, { status: "todo" }) : Promise.resolve([]),
-          ]);
-          const activeProject = projects.find((p) => p.status === "active") || null;
-          const recentTasks = tasks
-            .sort((a, b) => {
-              const order = { high: 0, medium: 1, low: 2 };
-              return (order[a.priority] ?? 1) - (order[b.priority] ?? 1);
-            })
-            .slice(0, 5);
+        console.log(`[routing] Client-specified skill: ${activeSkill.id} (${detectionMs}ms)`);
 
-          const conversationSummary = messages
-            .slice(-3)
-            .map((m: any) => m.content)
-            .join(" | ")
-            .slice(0, 200);
-
-          skillContext = {
-            userMessage: lastUserMessage,
-            chainedSkillIds: activeSkill.chainsWith,
+      } else if (skillRoute.secondary) {
+        // Multi-domain detected — compose chained prompt
+        const primarySkills = getSkillsByDomain(skillRoute.primary);
+        const secondarySkills = getSkillsByDomain(skillRoute.secondary);
+        if (primarySkills.length > 0 && secondarySkills.length > 0) {
+          activeSkill = primarySkills[0];
+          const secondarySkill = secondarySkills[0];
+          skillContext = { userMessage: lastUserMessage, chainedSkillIds: activeSkill.chainsWith };
+          chainedPromptOverride = composeChainedPrompt(activeSkill, secondarySkill, skillContext);
+          wasAutoDetected = true;
+          detectedSkill = {
+            primary: skillRoute.primary,
+            secondary: skillRoute.secondary,
+            wasAutoDetected: true,
+            skillName: `${activeSkill.name} + ${secondarySkill.name}`,
           };
 
-          res.write(`data: ${JSON.stringify({ type: "skill_active", skillId: activeSkill.id, skillName: activeSkill.name })}\n\n`);
-        } catch (err) {
-          console.warn("Skill context fetch failed, using empty context:", err);
+          console.log(
+            `[routing] Chained: ${activeSkill.id} + ${secondarySkill.id} ` +
+            `(layer: ${skillRoute.layer}, ${detectionMs}ms)`
+          );
+        }
+
+      } else if (skillRoute.primary) {
+        // Single domain auto-detected
+        const domainSkills = getSkillsByDomain(skillRoute.primary);
+        if (domainSkills.length > 0) {
+          activeSkill = domainSkills[0];
           skillContext = { userMessage: lastUserMessage, chainedSkillIds: activeSkill.chainsWith };
+          wasAutoDetected = true;
+          detectedSkill = {
+            primary: skillRoute.primary,
+            secondary: null,
+            wasAutoDetected: true,
+            skillName: activeSkill.name,
+          };
+
+          console.log(
+            `[routing] Auto-detected: ${activeSkill.id} ` +
+            `(layer: ${skillRoute.layer}, ${detectionMs}ms)`
+          );
         }
       }
 
+      // Emit skill detection info to client
+      if (detectedSkill) {
+        res.write(`data: ${JSON.stringify({ type: "skill_active", ...detectedSkill })}\n\n`);
+      }
+
       const isTriage = detectStressSignals(lastUserMessage);
-      const systemPrompt = buildTruthSystemPrompt(mode, explainLevel, dbMemory, {
-        isTriage,
-        activeSkill,
-        skillContext,
-      });
+      const systemPrompt = chainedPromptOverride
+        ? buildTruthSystemPrompt(mode, explainLevel, dbMemory, { isTriage }) +
+          "\n\n---\nACTIVE DOMAIN EXPERTISE:\n" + chainedPromptOverride
+        : buildTruthSystemPrompt(mode, explainLevel, dbMemory, {
+            isTriage,
+            activeSkill,
+            skillContext,
+          });
 
       // ─── Research mode ─────────────────────────────────────────────
       if (mode === "research") {
@@ -334,7 +401,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { cleanContent: preConfContent, confidence, confidenceReason } = parseConfidence(preActionContent);
       const { cleanContent, documentRequest } = parseDocumentRequest(preConfContent);
 
-      res.write(`data: ${JSON.stringify({ type: "confidence", confidence, confidenceReason, ...(activeSkillId ? { activeSkillId } : {}) })}\n\n`);
+      res.write(`data: ${JSON.stringify({
+        type: "confidence",
+        confidence,
+        confidenceReason,
+        ...(activeSkillId ? { activeSkillId } : {}),
+        ...(detectedSkill ? { detectedSkill } : {}),
+      })}\n\n`);
       if (documentRequest) res.write(`data: ${JSON.stringify({ type: "document_request", documentRequest })}\n\n`);
       if (actionItems.length > 0) res.write(`data: ${JSON.stringify({ type: "action_items", actionItems })}\n\n`);
 
