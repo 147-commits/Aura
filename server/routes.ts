@@ -66,11 +66,9 @@ import {
   budgetCheck,
 } from "./middleware";
 import { selectModel, trackCompletion, getBackgroundModel } from "./model-router";
+import { createStream, getOpenAI } from "./ai-provider";
 
-const openai = new OpenAI({
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
+const openai = getOpenAI();
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -360,38 +358,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       res.write(`data: ${JSON.stringify({ type: "model_tier", tier: modelConfig.tier, reason: modelConfig.reason })}\n\n`);
 
-      const openaiMessages: any[] = [{ role: "system", content: systemPrompt }];
+      const chatMessages: { role: "system" | "user" | "assistant"; content: string }[] = [
+        { role: "system", content: systemPrompt },
+      ];
 
       for (const msg of messages) {
         if (msg.role === "user" && msg === messages[messages.length - 1] && processedAttachments.length > 0) {
-          const contentParts: any[] = [];
           const attachContext = buildAttachmentContext(processedAttachments);
-          contentParts.push({ type: "text", text: (attachContext ? attachContext + "\n\n" : "") + msg.content });
-
-          const imageAttachments = processedAttachments.filter((a) => a.type === "image" && a.base64);
-          for (const img of imageAttachments) {
-            contentParts.push({
-              type: "image_url",
-              image_url: { url: `data:${img.mimeType};base64,${img.base64}` },
-            });
-          }
-          openaiMessages.push({ role: "user", content: contentParts });
+          const combined = (attachContext ? attachContext + "\n\n" : "") + msg.content;
+          chatMessages.push({ role: "user", content: combined });
         } else {
-          openaiMessages.push(msg);
+          chatMessages.push({ role: msg.role, content: msg.content });
         }
       }
 
-      const stream = await openai.chat.completions.create({
-        model: modelConfig.model,
-        messages: openaiMessages,
-        stream: true,
-        max_completion_tokens: modelConfig.maxTokens,
-      });
+      // Stream via unified provider — Claude for skills, OpenAI for everything else
+      const stream = createStream(modelConfig.modelId, chatMessages, modelConfig.maxTokens);
 
       let fullContent = "";
       let actionMarkerDetected = false;
       for await (const chunk of stream) {
-        const content = chunk.choices[0]?.delta?.content || "";
+        const content = chunk.content;
         if (content) {
           fullContent += content;
           if (fullContent.includes("|||ACTION_ITEMS|||")) actionMarkerDetected = true;

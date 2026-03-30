@@ -1,24 +1,23 @@
-import OpenAI from "openai";
 import type { ChatMode } from "./truth-engine";
 import type { SkillDomain } from "./skill-engine";
+import type { ModelId } from "./ai-provider";
 import { trackTokenUsage } from "./middleware";
 
 /**
- * Model Router — routes queries to the cheapest capable model.
+ * Model Router — routes queries to the cheapest capable model and provider.
  *
- * Strategy:
- * - Simple chat, casual questions → gpt-4o-mini (~10x cheaper)
- * - Complex analysis, research, decision-making → gpt-4o
- * - Domain skill active or chained → gpt-4o (measurably better results)
- * - Triage mode → gpt-4o-mini (short, structured responses)
- * - Memory extraction, action detection, mode detection → gpt-4o-mini (background tasks)
+ * Provider strategy (hybrid):
+ *   - Claude Sonnet → skill responses (less hallucination, better structured prompts)
+ *   - GPT-4o-mini   → routing, classification, background tasks (cheap, fast)
+ *   - GPT-4o        → research, complex non-skill queries
  *
- * This is the single most important cost optimization.
- * Without routing, a $9.99/month subscription is barely viable.
- * With routing, target 60%+ gross margins.
+ * Cost targets at $9.99/month subscription:
+ *   - ~$3.60/month per active user (skill responses via Claude)
+ *   - ~$0.30/month per active user (routing + background via mini)
+ *   - Target: 60%+ gross margins
  */
 
-export type ModelTier = "mini" | "standard";
+export type ModelTier = "mini" | "standard" | "skill";
 export type ModelSelectionReason =
   | "domain-skill-active"
   | "domain-skill-chained"
@@ -28,6 +27,7 @@ export type ModelSelectionReason =
 
 export interface ModelConfig {
   model: string;
+  modelId: ModelId;
   maxTokens: number;
   tier: ModelTier;
   reason: ModelSelectionReason;
@@ -42,16 +42,21 @@ export interface SkillModelOptions {
 
 // ── Cost Constants ──────────────────────────────────────────────────────────
 /** Cost per 1K tokens (blended input+output estimate) */
-const GPT4O_COST_PER_1K = 0.005;
-const GPT4O_MINI_COST_PER_1K = 0.00015;
+const COST_PER_1K: Record<ModelTier, number> = {
+  mini: 0.00015,      // GPT-4o-mini
+  standard: 0.005,    // GPT-4o
+  skill: 0.006,       // Claude Sonnet (blended)
+};
 /** Default estimated tokens per request (prompt + response) */
 const DEFAULT_REQUEST_TOKENS = 2000;
 /** Monthly cost warning threshold per user (USD) */
 const MONTHLY_COST_WARN_THRESHOLD = 50;
 
-const BASE_MODELS: Record<ModelTier, { model: string; maxTokens: number }> = {
-  mini: { model: "gpt-4o-mini", maxTokens: 4096 },
-  standard: { model: "gpt-4o", maxTokens: 4096 },
+/** Maps tier to the provider model ID used by ai-provider.ts */
+const TIER_TO_MODEL: Record<ModelTier, { modelId: ModelId; model: string; maxTokens: number }> = {
+  mini: { modelId: "gpt-4o-mini", model: "gpt-4o-mini", maxTokens: 4096 },
+  standard: { modelId: "gpt-4o", model: "gpt-4o", maxTokens: 4096 },
+  skill: { modelId: "claude-sonnet", model: "claude-sonnet-4-20250514", maxTokens: 4096 },
 };
 
 // ── Monthly Cost Tracking ───────────────────────────────────────────────────
@@ -78,17 +83,18 @@ function checkMonthlyCostGuard(userId: string, estimatedCost: number): void {
   }
 }
 
-/** Estimate USD cost for a given model and token count */
+/** Estimate USD cost for a given model tier and token count */
 function estimateCost(tier: ModelTier, tokens: number = DEFAULT_REQUEST_TOKENS): number {
-  const rate = tier === "standard" ? GPT4O_COST_PER_1K : GPT4O_MINI_COST_PER_1K;
-  return (tokens / 1000) * rate;
+  return (tokens / 1000) * COST_PER_1K[tier];
 }
 
-/** Build a ModelConfig with cost estimate */
+/** Build a ModelConfig with cost estimate and provider model mapping */
 function buildConfig(tier: ModelTier, reason: ModelSelectionReason): ModelConfig {
-  const base = BASE_MODELS[tier];
+  const entry = TIER_TO_MODEL[tier];
   return {
-    ...base,
+    model: entry.model,
+    modelId: entry.modelId,
+    maxTokens: entry.maxTokens,
     tier,
     reason,
     estimatedCost: estimateCost(tier),
@@ -99,10 +105,10 @@ function buildConfig(tier: ModelTier, reason: ModelSelectionReason): ModelConfig
  * Select the appropriate model based on chat mode, message complexity, and active skills.
  *
  * Priority order:
- *   1. Triage mode → mini (short structured responses, cost-efficient)
- *   2. Chained skills → standard (multi-domain needs full model capability)
- *   3. Active domain skill → standard (domain expertise benefits from gpt-4o)
- *   4. Mode-based → existing logic (research/decision → standard, else complexity check)
+ *   1. Triage mode → gpt-4o-mini (short structured responses, cost-efficient)
+ *   2. Chained skills → Claude Sonnet (multi-domain needs best structured reasoning)
+ *   3. Active domain skill → Claude Sonnet (less hallucination on framework-based prompts)
+ *   4. Mode-based → existing logic (research/decision → gpt-4o, else complexity check)
  */
 export function selectModel(
   mode: ChatMode,
@@ -114,14 +120,14 @@ export function selectModel(
     return buildConfig("mini", "triage");
   }
 
-  // Chained skills (primary + secondary): always standard
+  // Chained skills (primary + secondary): Claude for best structured reasoning
   if (options?.isChained) {
-    return buildConfig("standard", "domain-skill-chained");
+    return buildConfig("skill", "domain-skill-chained");
   }
 
-  // Active domain skill: upgrade to standard for better domain reasoning
+  // Active domain skill: Claude for less hallucination on framework-based responses
   if (options?.activeSkillDomain) {
-    return buildConfig("standard", "domain-skill-active");
+    return buildConfig("skill", "domain-skill-active");
   }
 
   // Existing mode-based logic (no behavior change)
@@ -142,7 +148,7 @@ export function selectModel(
  * These always use the cheapest model since they're not user-facing.
  */
 export function getBackgroundModel(): string {
-  return BASE_MODELS.mini.model;
+  return TIER_TO_MODEL.mini.model;
 }
 
 /**
