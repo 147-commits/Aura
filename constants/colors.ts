@@ -56,11 +56,13 @@ const palette = {
 // ─── Sapphire Prism Theme ──────────────────────────────────────────────────
 
 const dark = {
-  // ─── Backgrounds ───────────────────────────────────────────────────────
-  background: "#0A0F1E",          // Deep space — main screen (BG_PRIMARY)
+  // ─── Backgrounds (layered depth — night sky, never flat black) ───────────
+  background: "#080C18",          // Deep space — deepest layer (chat area focus)
+  backgroundCenter: "#0F1729",    // Orb glow center — radial gradient origin
   surface: "#111827",             // Elevated surface — cards, modals (BG_SURFACE)
   surfaceSecondary: "#1A2332",    // Double-elevated — dropdowns, skill picker (BG_SURFACE_2)
   surfaceTertiary: "#243044",     // Triple-elevated — active states (BG_SURFACE_3)
+  surfaceSidebar: "#0A0E1A",     // Sidebar — slightly lighter than main for separation
 
   // ─── Borders ───────────────────────────────────────────────────────────
   border: "#1E2D44",              // Subtle separator
@@ -81,8 +83,9 @@ const dark = {
 
   // ─── Glows ─────────────────────────────────────────────────────────────
   accentGlow: "rgba(79, 127, 255, 0.15)",         // ACCENT_SAPPHIRE_GLOW
-  accentGlowStrong: "rgba(79, 127, 255, 0.30)",
+  accentGlowStrong: "rgba(79, 127, 255, 0.25)",   // Orb ambient glow
   warmGlow: "rgba(232, 168, 76, 0.12)",           // ACCENT_AMBER_GLOW
+  warmGlowStrong: "rgba(232, 168, 76, 0.20)",    // Status dot glow
 
   // ─── Semantic ──────────────────────────────────────────────────────────
   success: "#6EE7B7",            // Mint — positive states
@@ -119,8 +122,12 @@ const dark = {
   tabIconSelected: "#4F7FFF",
 
   // ─── Chat-specific ─────────────────────────────────────────────────────
-  userBubble: "#3B6AE6",
-  assistantBubble: "#111827",
+  userBubble: "#4F7FFF",           // Gradient start — user bubble
+  userBubbleEnd: "#3B6FEF",        // Gradient end — user bubble
+  assistantBubble: "#141E30",      // Gradient start — assistant bubble (alive, not grey)
+  assistantBubbleEnd: "#1A2540",   // Gradient end — assistant bubble
+  assistantBubbleBorder: "rgba(79, 127, 255, 0.12)",  // Subtle sapphire tint
+  assistantBubbleAccent: "rgba(79, 127, 255, 0.4)",   // Left border accent
   streamingCursor: palette.sapphire400,
 
   // ─── Mode Accents ──────────────────────────────────────────────────────

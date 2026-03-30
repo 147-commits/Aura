@@ -805,13 +805,13 @@ const chipStyles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: C.surface,
-    borderWidth: StyleSheet.hairlineWidth,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
   },
   chipActive: {
-    backgroundColor: C.accent + "22",
-    borderColor: C.accent + "44",
+    borderColor: "rgba(79, 127, 255, 0.3)",
+    backgroundColor: "rgba(79, 127, 255, 0.08)",
   },
   chipText: {
     fontSize: 12,
@@ -1376,7 +1376,23 @@ export default function ChatScreen() {
   const flatListRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
 
-  // ─── Orb Thinking Animation ─────────────────────────────────────────
+  // ─── Orb Breathing Animation (always alive) ─────────────────────────
+  const orbBreathe = useRef(new RNAnimated.Value(0)).current;
+  useEffect(() => {
+    const loop = RNAnimated.loop(
+      RNAnimated.sequence([
+        RNAnimated.timing(orbBreathe, { toValue: 1, duration: 1500, useNativeDriver: true }),
+        RNAnimated.timing(orbBreathe, { toValue: 0, duration: 1500, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+  const orbBreatheScale = useMemo(() => orbBreathe.interpolate({
+    inputRange: [0, 1], outputRange: [1, 1.02],
+  }), []);
+
+  // ─── Orb Thinking Animation (skill active) ─────────────────────────
   const orbPulse = useRef(new RNAnimated.Value(0)).current;
   const orbAnimRef = useRef<RNAnimated.CompositeAnimation | null>(null);
   const skillChipGlow = useRef(new RNAnimated.Value(0)).current;
@@ -1998,7 +2014,7 @@ export default function ChatScreen() {
       const errMsg: Message = {
         id: generateId(),
         role: "assistant",
-        content: "Something went wrong. Please try again.",
+        content: "\u21BB Connection issue \u2014 tap to retry",
         type: "text",
         mode: "chat",
         timestamp: Date.now(),
@@ -2121,10 +2137,10 @@ export default function ChatScreen() {
         <View style={styles.headerLeft}>
           <RNAnimated.View style={[
             styles.headerAvatar,
-            isSkillThinking && {
-              borderColor: orbColor,
-              transform: [{ scale: orbScale }],
+            {
+              transform: [{ scale: isSkillThinking ? orbScale : orbBreatheScale }],
             },
+            isSkillThinking && { borderColor: orbColor },
           ]}>
             <RNAnimated.View style={[
               styles.headerAvatarMiddle,
@@ -2258,7 +2274,8 @@ export default function ChatScreen() {
           isPrivate={isPrivate}
           currentMode={mode}
         />
-        {/* Toolbar */}
+        {/* Toolbar separator + mode row */}
+        <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: "rgba(255,255,255,0.06)", marginHorizontal: 4, marginBottom: 4 }} />
         <View style={styles.toolbar}>
           {/* Private Toggle */}
           <Pressable
@@ -2447,19 +2464,24 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: "rgba(59, 130, 246, 0.10)",
+    backgroundColor: C.accentGlow,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(59, 130, 246, 0.25)",
+    borderColor: C.accentGlowStrong,
+    // Ambient glow behind orb
+    shadowColor: C.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
   },
   headerAvatarMiddle: {
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: "rgba(59, 130, 246, 0.18)",
+    backgroundColor: "rgba(79, 127, 255, 0.18)",
     borderWidth: 1,
-    borderColor: "rgba(59, 130, 246, 0.4)",
+    borderColor: "rgba(79, 127, 255, 0.4)",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -2467,15 +2489,22 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: C.accent,
+    backgroundColor: C.accentHover,
     shadowColor: C.accent,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 6,
+    shadowOpacity: 0.9,
+    shadowRadius: 8,
   },
   headerTitle: { fontSize: 15, fontWeight: "600", color: C.text, fontFamily: "Inter_600SemiBold" },
   headerStatusRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 1 },
-  headerOnlineDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: "#22C55E" },
+  headerOnlineDot: {
+    width: 5, height: 5, borderRadius: 3,
+    backgroundColor: C.accentWarm,
+    shadowColor: C.accentWarm,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+  },
   headerStatus: { fontSize: 11, color: C.textSecondary, fontFamily: "Inter_400Regular" },
   memoryBtn: { position: "relative", padding: 4 },
   memoryBadge: {
@@ -2514,12 +2543,12 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: "#1a1d26",
+    backgroundColor: C.assistantBubble,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 7,
     borderWidth: 1,
-    borderColor: C.accent + "30",
+    borderColor: C.assistantBubbleBorder,
     flexShrink: 0,
   },
   avatarA: {
@@ -2536,14 +2565,20 @@ const styles = StyleSheet.create({
     maxWidth: "100%",
   },
   bubbleUser: {
-    backgroundColor: C.accent,
+    backgroundColor: C.userBubble,
     borderBottomRightRadius: 5,
+    shadowColor: C.accent,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
   bubbleAgent: {
-    backgroundColor: "#1a1d26",
+    backgroundColor: C.assistantBubble,
     borderBottomLeftRadius: 5,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.07)",
+    borderWidth: 1,
+    borderColor: C.assistantBubbleBorder,
+    borderLeftWidth: 2,
+    borderLeftColor: C.assistantBubbleAccent,
   },
   bubbleText: { fontSize: 15, lineHeight: 22, fontFamily: "Inter_400Regular" },
   bubbleTextUser: { color: "#fff" },
@@ -2595,7 +2630,7 @@ const styles = StyleSheet.create({
   actionBar: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#1a1d26",
+    backgroundColor: C.assistantBubble,
     borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.1)",
@@ -2762,7 +2797,7 @@ const styles = StyleSheet.create({
   },
 
   briefCard: {
-    backgroundColor: "#111820",
+    backgroundColor: C.assistantBubble,
     borderRadius: 16,
     padding: 16,
     marginVertical: 8,
@@ -2802,7 +2837,7 @@ const styles = StyleSheet.create({
   briefLoadingText: { fontSize: 13, color: C.textTertiary, fontFamily: "Inter_400Regular" },
 
   memoryPromptCard: {
-    backgroundColor: "#14182A",
+    backgroundColor: C.assistantBubble,
     borderRadius: 16,
     padding: 16,
     marginVertical: 8,
@@ -2869,7 +2904,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    backgroundColor: "#111318",
+    backgroundColor: "rgba(255,255,255,0.04)",
     borderRadius: 22,
     paddingHorizontal: 16,
     paddingTop: 10,
@@ -2878,7 +2913,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Inter_400Regular",
     maxHeight: 120,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
   },
   sendBtn: {
@@ -2889,7 +2924,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  sendBtnDisabled: { backgroundColor: "#1e2230" },
+  sendBtnDisabled: { backgroundColor: "rgba(255,255,255,0.06)" },
 
   modalOverlay: {
     flex: 1,
@@ -2898,7 +2933,7 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.6)" },
   modalSheet: {
-    backgroundColor: "#111318",
+    backgroundColor: C.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     ...(Platform.OS === "web" ? { borderBottomLeftRadius: 24, borderBottomRightRadius: 24, maxWidth: 480, width: "100%" as any } : {}),
