@@ -249,39 +249,30 @@ export function composeChainedPrompt(
   secondary: SkillDefinition,
   context: SkillContext
 ): string {
-  const primaryBlock = `PRIMARY EXPERTISE — ${primary.name}:\n${primary.systemPrompt}`;
+  const primaryHeader = `PRIMARY EXPERTISE — ${primary.name}:\n`;
+  const secondaryHeader = `\n\nSECONDARY LENS — ${secondary.name}:\nAlso consider ${secondary.name} perspective:\n`;
   const integrationNote =
     `\n\nINTEGRATION: Address the primary domain first (${primary.name}), ` +
     `then add ${secondary.name} considerations as a clearly labeled section.`;
 
-  // Calculate budget for secondary after primary + integration
-  const fixedLength = primaryBlock.length + integrationNote.length;
-  const secondaryBudget = CHAINED_PROMPT_BUDGET - fixedLength;
+  const overhead = primaryHeader.length + secondaryHeader.length + integrationNote.length;
+  const contentBudget = CHAINED_PROMPT_BUDGET - overhead;
 
-  let secondaryBlock: string;
-  if (secondaryBudget <= 50) {
-    // Not enough room for secondary — skip it
-    return primaryBlock;
+  if (contentBudget <= 40) {
+    return primaryHeader + primary.systemPrompt.slice(0, CHAINED_PROMPT_BUDGET - primaryHeader.length - 3) + "...";
   }
 
-  const fullSecondary =
-    `\n\nSECONDARY LENS — ${secondary.name}:\n` +
-    `Also consider ${secondary.name} perspective:\n${secondary.systemPrompt}`;
+  // Split budget: 60% primary, 40% secondary
+  const primaryBudget = Math.floor(contentBudget * 0.6);
+  const secondaryBudget = contentBudget - primaryBudget;
 
-  if (fullSecondary.length <= secondaryBudget) {
-    secondaryBlock = fullSecondary;
-  } else {
-    // Truncate secondary prompt to fit budget
-    const headerLength = `\n\nSECONDARY LENS — ${secondary.name}:\nAlso consider ${secondary.name} perspective:\n`.length;
-    const maxPromptChars = secondaryBudget - headerLength;
-    const truncatedPrompt = maxPromptChars > 20
-      ? secondary.systemPrompt.slice(0, maxPromptChars - 3) + "..."
-      : "";
-    if (!truncatedPrompt) return primaryBlock;
-    secondaryBlock =
-      `\n\nSECONDARY LENS — ${secondary.name}:\n` +
-      `Also consider ${secondary.name} perspective:\n${truncatedPrompt}`;
-  }
+  const primaryText = primary.systemPrompt.length <= primaryBudget
+    ? primary.systemPrompt
+    : primary.systemPrompt.slice(0, primaryBudget - 3) + "...";
 
-  return primaryBlock + secondaryBlock + integrationNote;
+  const secondaryText = secondary.systemPrompt.length <= secondaryBudget
+    ? secondary.systemPrompt
+    : secondary.systemPrompt.slice(0, secondaryBudget - 3) + "...";
+
+  return primaryHeader + primaryText + secondaryHeader + secondaryText + integrationNote;
 }
