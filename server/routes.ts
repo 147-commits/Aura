@@ -11,7 +11,16 @@ import {
   detectStressSignals,
   type ChatMode,
   type ExplainLevel,
+  type SkillContext,
 } from "./truth-engine";
+import {
+  getSkill,
+  getChainedSkills,
+  getSkillsByDomain,
+  SKILL_REGISTRY,
+  type SkillDefinition,
+  type SkillDomain,
+} from "./skill-engine";
 import { generatePDF, type DocumentRequest } from "./document-engine";
 import { runResearch } from "./research-engine";
 import {
@@ -63,6 +72,67 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024, files: 5 },
 });
 
+// ── Skill Discovery (cached, never changes at runtime) ────────────────────
+
+const SKILL_ICONS: Record<SkillDomain, string> = {
+  engineering: "code",
+  marketing: "megaphone",
+  product: "package",
+  finance: "bar-chart",
+  leadership: "compass",
+  operations: "settings",
+};
+
+const SKILL_DESCRIPTIONS: Record<string, string> = {
+  "engineering-architect": "System design, scalability, and infrastructure architecture",
+  "engineering-code-reviewer": "Code quality, refactoring, and pull request reviews",
+  "security-auditor": "Vulnerability assessment, threat modeling, and OWASP compliance",
+  "fullstack-engineer": "Modern web development across React, Node, TypeScript, and APIs",
+  "gtm-strategist": "Go-to-market positioning, ICP definition, and launch strategy",
+  "content-strategist": "Editorial planning, SEO strategy, and content-market fit",
+  "growth-marketer": "Funnel optimization, AARRR metrics, and growth experiments",
+  "product-manager": "PRDs, RICE prioritization, and product requirements",
+  "ux-researcher": "User research methods, usability testing, and design insights",
+  "roadmap-planner": "Quarterly planning, OKR alignment, and dependency mapping",
+  "financial-analyst": "Unit economics, P&L analysis, and financial health metrics",
+  "saas-metrics-coach": "MRR, NRR, churn analysis, and SaaS benchmarking",
+  "startup-ceo": "Company strategy, fundraising, and leadership decisions",
+  "cto-advisor": "Tech strategy, engineering org design, and build-vs-buy decisions",
+  "okr-coach": "Objective and key result setting, alignment, and goal quality",
+  "senior-pm": "Project delivery, critical path analysis, and stakeholder management",
+  "scrum-master": "Scrum ceremonies, team health, and continuous improvement",
+  "technical-writer": "Documentation strategy, Diataxis framework, and content structure",
+};
+
+function buildSkillSummary(skill: SkillDefinition) {
+  return {
+    id: skill.id,
+    name: skill.name,
+    domain: skill.domain,
+    icon: SKILL_ICONS[skill.domain],
+    description: SKILL_DESCRIPTIONS[skill.id] || skill.name,
+    chainsWith: skill.chainsWith,
+    triggerKeywords: skill.triggerKeywords,
+  };
+}
+
+/** Cached grouped skills response — built once, returned on every GET /api/skills */
+let cachedSkillsResponse: Record<string, ReturnType<typeof buildSkillSummary>[]> | null = null;
+
+function getGroupedSkills() {
+  if (cachedSkillsResponse) return cachedSkillsResponse;
+  const domains: SkillDomain[] = ["engineering", "marketing", "product", "finance", "leadership", "operations"];
+  cachedSkillsResponse = {} as Record<string, ReturnType<typeof buildSkillSummary>[]>;
+  for (const domain of domains) {
+    cachedSkillsResponse[domain] = getSkillsByDomain(domain).map(buildSkillSummary);
+  }
+  return cachedSkillsResponse;
+}
+
+function getAllSkillIds(): string[] {
+  return Array.from(SKILL_REGISTRY.keys());
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // ─── HEALTH ────────────────────────────────────────────────────────────
   app.get("/api/health", (_req, res) => {
@@ -92,6 +162,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isPrivate = false,
         rememberFlag = true,
         autoDetectMode = false,
+        activeSkillId,
       } = body;
 
       const userId = req.userId;
@@ -131,8 +202,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dbMemory = memories.map((m: any) => ({ text: m.text, category: m.category }));
       }
 
+      // ─── Skill resolution ───────────────────────────────────────────
+      let activeSkill: SkillDefinition | undefined;
+      let skillContext: SkillContext | undefined;
+
+      if (activeSkillId) {
+        activeSkill = getSkill(activeSkillId);
+        if (!activeSkill) {
+          res.write(`data: ${JSON.stringify({ type: "error", error: "Unknown skill ID", validSkills: getAllSkillIds() })}\n\n`);
+          res.write("data: [DONE]\n\n");
+          res.end();
+          return;
+        }
+
+        // Build skill context — DB fetches in parallel, never block chat on failure
+        try {
+          const [projects, tasks] = await Promise.all([
+            userId ? getProjects(userId) : Promise.resolve([]),
+            userId ? getTasks(userId, { status: "todo" }) : Promise.resolve([]),
+          ]);
+          const activeProject = projects.find((p) => p.status === "active") || null;
+          const recentTasks = tasks
+            .sort((a, b) => {
+              const order = { high: 0, medium: 1, low: 2 };
+              return (order[a.priority] ?? 1) - (order[b.priority] ?? 1);
+            })
+            .slice(0, 5);
+
+          const conversationSummary = messages
+            .slice(-3)
+            .map((m: any) => m.content)
+            .join(" | ")
+            .slice(0, 200);
+
+          skillContext = {
+            userMessage: lastUserMessage,
+            chainedSkillIds: activeSkill.chainsWith,
+          };
+
+          res.write(`data: ${JSON.stringify({ type: "skill_active", skillId: activeSkill.id, skillName: activeSkill.name })}\n\n`);
+        } catch (err) {
+          console.warn("Skill context fetch failed, using empty context:", err);
+          skillContext = { userMessage: lastUserMessage, chainedSkillIds: activeSkill.chainsWith };
+        }
+      }
+
       const isTriage = detectStressSignals(lastUserMessage);
-      const systemPrompt = buildTruthSystemPrompt(mode, explainLevel, dbMemory, { isTriage });
+      const systemPrompt = buildTruthSystemPrompt(mode, explainLevel, dbMemory, {
+        isTriage,
+        activeSkill,
+        skillContext,
+      });
 
       // ─── Research mode ─────────────────────────────────────────────
       if (mode === "research") {
@@ -214,7 +334,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { cleanContent: preConfContent, confidence, confidenceReason } = parseConfidence(preActionContent);
       const { cleanContent, documentRequest } = parseDocumentRequest(preConfContent);
 
-      res.write(`data: ${JSON.stringify({ type: "confidence", confidence, confidenceReason })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: "confidence", confidence, confidenceReason, ...(activeSkillId ? { activeSkillId } : {}) })}\n\n`);
       if (documentRequest) res.write(`data: ${JSON.stringify({ type: "document_request", documentRequest })}\n\n`);
       if (actionItems.length > 0) res.write(`data: ${JSON.stringify({ type: "action_items", actionItems })}\n\n`);
 
@@ -564,6 +684,17 @@ Keep each field under 15 words. Be specific and personal. Never invent facts you
       console.error("Extract actions error:", err);
       res.status(500).json({ error: "Failed to extract action items" });
     }
+  });
+
+  // ─── SKILLS ───────────────────────────────────────────────────────────
+  app.get("/api/skills", requireAuth, (_req, res) => {
+    res.json(getGroupedSkills());
+  });
+
+  app.get("/api/skills/:id", requireAuth, (req, res) => {
+    const skill = getSkill(req.params.id);
+    if (!skill) return res.status(404).json({ error: "Skill not found" });
+    res.json(buildSkillSummary(skill));
   });
 
   const httpServer = createServer(app);
