@@ -51,6 +51,17 @@ const QUICK_CHIPS: { label: string; mode: string; icon: keyof typeof Ionicons.gl
   { label: "Decide", mode: "decision", icon: "git-branch-outline" },
 ];
 
+const DOMAIN_CONFIG: Record<string, { color: string; icon: keyof typeof Ionicons.glyphMap; label: string }> = {
+  engineering: { color: C.domainEngineering, icon: "code-slash-outline", label: "Engineering" },
+  marketing:   { color: C.domainMarketing,   icon: "megaphone-outline",  label: "Marketing" },
+  product:     { color: C.domainProduct,     icon: "cube-outline",       label: "Product" },
+  finance:     { color: C.domainFinance,     icon: "bar-chart-outline",  label: "Finance" },
+  leadership:  { color: C.domainLeadership,  icon: "compass-outline",    label: "Leadership" },
+  operations:  { color: C.domainOperations,  icon: "settings-outline",   label: "Operations" },
+};
+
+const DOMAIN_ORDER = ["engineering", "marketing", "product", "finance", "leadership", "operations"];
+
 function formatAuraText(raw: string): string {
   return raw
     .replace(/\|\|\|DOCUMENT_REQUEST\|\|\|[\s\S]*$/, "")
@@ -150,6 +161,8 @@ type Message = {
   documentRequest?: DocumentRequest;
   attachments?: { name: string; type: string }[];
   actionItems?: ActionItem[];
+  skillName?: string;
+  skillAutoDetected?: boolean;
 };
 
 type MemoryItem = {
@@ -158,6 +171,23 @@ type MemoryItem = {
   category: string;
   confidence?: string;
   createdAt?: string;
+};
+
+type SkillSummaryUI = {
+  id: string;
+  name: string;
+  domain: string;
+  icon: string;
+  description: string;
+  chainsWith: string[];
+  triggerKeywords: string[];
+};
+
+type DetectedSkillInfo = {
+  primary: string | null;
+  secondary: string | null;
+  wasAutoDetected: boolean;
+  skillName: string | null;
 };
 
 // ─── Storage Keys ──────────────────────────────────────────────────────────
@@ -790,6 +820,184 @@ const chipStyles = StyleSheet.create({
   chipTextActive: { color: C.accent },
 });
 
+// ─── Skill Badge (on assistant messages) ────────────────────────────────────
+
+function SkillBadge({ skillName, wasAutoDetected }: { skillName: string; wasAutoDetected?: boolean }) {
+  const isChained = skillName.includes("+");
+  const primaryDomain = Object.keys(DOMAIN_CONFIG).find((d) =>
+    skillName.toLowerCase().includes(DOMAIN_CONFIG[d].label.toLowerCase())
+  );
+  const dotColor = primaryDomain ? DOMAIN_CONFIG[primaryDomain].color : C.textTertiary;
+
+  return (
+    <View style={skillBadgeStyles.container}>
+      <View style={[skillBadgeStyles.dot, { backgroundColor: dotColor }]} />
+      {wasAutoDetected && <Text style={skillBadgeStyles.auto}>✦</Text>}
+      <Text style={skillBadgeStyles.text} numberOfLines={1}>{skillName}</Text>
+    </View>
+  );
+}
+
+const skillBadgeStyles = StyleSheet.create({
+  container: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: 3,
+    paddingLeft: 2,
+  },
+  dot: { width: 6, height: 6, borderRadius: 3 },
+  auto: { fontSize: 10, color: C.accentWarm },
+  text: { fontSize: 11, color: C.textTertiary, fontFamily: "Inter_400Regular" },
+});
+
+// ─── Skill Picker Sheet ─────────────────────────────────────────────────────
+
+function SkillPickerSheet({
+  visible,
+  skillsByDomain,
+  activeSkillId,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  skillsByDomain: Record<string, SkillSummaryUI[]> | null;
+  activeSkillId: string | null;
+  onSelect: (id: string | null) => void;
+  onClose: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent presentationStyle="overFullScreen">
+      <View style={skillPickerStyles.overlay}>
+        <Pressable style={skillPickerStyles.backdrop} onPress={onClose} />
+        <View style={[skillPickerStyles.sheet, { paddingBottom: insets.bottom + 16, maxHeight: "70%" }]}>
+          <View style={skillPickerStyles.handle} />
+          <View style={skillPickerStyles.header}>
+            <Text style={skillPickerStyles.title}>Choose expertise</Text>
+            <Pressable onPress={onClose} style={skillPickerStyles.closeBtn}>
+              <Ionicons name="close" size={20} color={C.textSecondary} />
+            </Pressable>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {/* General (Auto) option */}
+            <Pressable
+              style={[skillPickerStyles.skillOption, !activeSkillId && skillPickerStyles.skillOptionActive]}
+              onPress={() => { onSelect(null); onClose(); }}
+            >
+              <View style={[skillPickerStyles.skillDot, { backgroundColor: C.accent }]} />
+              <View style={skillPickerStyles.skillInfo}>
+                <Text style={[skillPickerStyles.skillName, !activeSkillId && skillPickerStyles.skillNameActive]}>
+                  General
+                </Text>
+                <Text style={skillPickerStyles.skillDesc}>Aura picks the right expertise automatically</Text>
+              </View>
+              {!activeSkillId && <Ionicons name="checkmark" size={16} color={C.accent} />}
+            </Pressable>
+
+            {/* Domain sections */}
+            {skillsByDomain ? DOMAIN_ORDER.map((domain) => {
+              const config = DOMAIN_CONFIG[domain];
+              const skills = skillsByDomain[domain];
+              if (!skills || skills.length === 0) return null;
+              return (
+                <View key={domain}>
+                  <View style={skillPickerStyles.domainHeader}>
+                    <Ionicons name={config.icon} size={14} color={config.color} />
+                    <Text style={[skillPickerStyles.domainLabel, { color: config.color }]}>
+                      {config.label}
+                    </Text>
+                  </View>
+                  {skills.map((skill) => {
+                    const isActive = activeSkillId === skill.id;
+                    return (
+                      <Pressable
+                        key={skill.id}
+                        style={[skillPickerStyles.skillOption, isActive && skillPickerStyles.skillOptionActive]}
+                        onPress={() => { onSelect(skill.id); onClose(); }}
+                      >
+                        <View style={[skillPickerStyles.skillDot, { backgroundColor: config.color }]} />
+                        <View style={skillPickerStyles.skillInfo}>
+                          <Text style={[skillPickerStyles.skillName, isActive && skillPickerStyles.skillNameActive]}>
+                            {skill.name}
+                          </Text>
+                          <Text style={skillPickerStyles.skillDesc} numberOfLines={1}>
+                            {skill.description}
+                          </Text>
+                        </View>
+                        {isActive && <Ionicons name="checkmark" size={16} color={C.accent} />}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              );
+            }) : (
+              <View style={skillPickerStyles.loading}>
+                <ActivityIndicator size="small" color={C.textTertiary} />
+                <Text style={skillPickerStyles.loadingText}>Loading skills...</Text>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const skillPickerStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    justifyContent: Platform.OS === "web" ? "center" : "flex-end",
+    alignItems: Platform.OS === "web" ? "center" : "stretch",
+  },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.6)" },
+  sheet: {
+    backgroundColor: C.surfaceSecondary,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 12,
+    paddingHorizontal: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.08)",
+    ...(Platform.OS === "web" ? { borderRadius: 24, maxWidth: 420, width: "100%" } : {}),
+  },
+  handle: {
+    width: 36, height: 4, borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignSelf: "center", marginBottom: 16,
+  },
+  header: {
+    flexDirection: "row", alignItems: "center",
+    justifyContent: "space-between", marginBottom: 16,
+  },
+  title: { fontSize: 17, fontFamily: "Inter_600SemiBold", color: C.text },
+  closeBtn: { padding: 4 },
+  domainHeader: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingVertical: 10, paddingHorizontal: 4,
+    marginTop: 8,
+  },
+  domainLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5, textTransform: "uppercase" },
+  skillOption: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingVertical: 12, paddingHorizontal: 12,
+    borderRadius: 12, marginBottom: 2,
+  },
+  skillOptionActive: {
+    backgroundColor: C.accent + "12",
+    borderWidth: 1, borderColor: C.accent + "30",
+  },
+  skillDot: { width: 8, height: 8, borderRadius: 4 },
+  skillInfo: { flex: 1 },
+  skillName: { fontSize: 14, fontFamily: "Inter_500Medium", color: C.text },
+  skillNameActive: { color: C.accent },
+  skillDesc: { fontSize: 12, color: C.textTertiary, fontFamily: "Inter_400Regular", marginTop: 1 },
+  loading: { alignItems: "center", paddingVertical: 32, gap: 8 },
+  loadingText: { fontSize: 13, color: C.textTertiary, fontFamily: "Inter_400Regular" },
+});
+
 // ─── Message Bubble ─────────────────────────────────────────────────────────
 
 function MessageBubble({
@@ -876,6 +1084,9 @@ function MessageBubble({
         </View>
       )}
       <View style={styles.bubbleColumn}>
+        {!isUser && message.skillName && (
+          <SkillBadge skillName={message.skillName} wasAutoDetected={message.skillAutoDetected} />
+        )}
         {!isUser && isResearch && message.mode && (
           <ModeBadge mode={message.mode} />
         )}
@@ -1157,6 +1368,10 @@ export default function ChatScreen() {
   const [deviceId, setDeviceId] = useState<string>("anonymous");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const [activeSkillId, setActiveSkillId] = useState<string | null>(null);
+  const [showSkillPicker, setShowSkillPicker] = useState(false);
+  const [skillsByDomain, setSkillsByDomain] = useState<Record<string, SkillSummaryUI[]> | null>(null);
+  const [detectedSkill, setDetectedSkill] = useState<DetectedSkillInfo | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
 
@@ -1179,6 +1394,18 @@ export default function ChatScreen() {
     const id = await getDeviceId();
     setDeviceId(id);
     await loadData(id);
+    // Fetch skills once — cached forever, never refetch
+    try {
+      const baseUrl = getApiUrl();
+      const skillsUrl = new URL("/api/skills", baseUrl);
+      const resp = await fetch(skillsUrl.toString(), { headers: apiHeaders(id) });
+      if (resp.ok) {
+        const data = await resp.json();
+        setSkillsByDomain(data);
+      }
+    } catch (err) {
+      console.warn("Skills fetch failed:", err);
+    }
   };
 
   const loadData = async (devId: string) => {
@@ -1545,6 +1772,7 @@ export default function ChatScreen() {
         formData.append("isPrivate", String(isPrivate));
         formData.append("rememberFlag", String(!isPrivate));
         formData.append("autoDetectMode", "false");
+        if (activeSkillId) formData.append("activeSkillId", activeSkillId);
 
         for (const att of currentAttachments) {
           const fileObj = {
@@ -1571,6 +1799,7 @@ export default function ChatScreen() {
             isPrivate,
             rememberFlag: !isPrivate,
             autoDetectMode: false,
+            ...(activeSkillId ? { activeSkillId } : {}),
           }),
         });
       }
@@ -1588,6 +1817,8 @@ export default function ChatScreen() {
       let finalCitations: Citation[] = [];
       let finalDocRequest: DocumentRequest | null = null;
       let finalActionItems: ActionItem[] = [];
+      let finalSkillName: string | undefined;
+      let finalSkillAutoDetected: boolean | undefined;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -1602,11 +1833,24 @@ export default function ChatScreen() {
           if (data === "[DONE]") break;
           try {
             const parsed = JSON.parse(data);
-            if (parsed.type === "confidence") {
+            if (parsed.type === "skill_active") {
+              finalSkillName = parsed.skillName || undefined;
+              finalSkillAutoDetected = parsed.wasAutoDetected ?? undefined;
+              setDetectedSkill({
+                primary: parsed.primary || null,
+                secondary: parsed.secondary || null,
+                wasAutoDetected: parsed.wasAutoDetected ?? false,
+                skillName: parsed.skillName || null,
+              });
+            } else if (parsed.type === "confidence") {
               finalConfidence = parsed.confidence;
               finalConfidenceReason = parsed.confidenceReason || "";
               setStreamingConfidence(parsed.confidence);
               setStreamingConfidenceReason(parsed.confidenceReason || "");
+              if (parsed.detectedSkill) {
+                finalSkillName = parsed.detectedSkill.skillName || undefined;
+                finalSkillAutoDetected = parsed.detectedSkill.wasAutoDetected ?? undefined;
+              }
             } else if (parsed.type === "citations") {
               finalCitations = parsed.citations || [];
               setStreamingCitations(parsed.citations || []);
@@ -1644,6 +1888,8 @@ export default function ChatScreen() {
         citations: finalCitations.length > 0 ? finalCitations : undefined,
         documentRequest: finalDocRequest ?? undefined,
         actionItems: finalActionItems.length > 0 ? finalActionItems : undefined,
+        skillName: finalSkillName,
+        skillAutoDetected: finalSkillAutoDetected,
         timestamp: Date.now(),
       };
 
@@ -1833,19 +2079,50 @@ export default function ChatScreen() {
             </View>
           </View>
         </View>
-        <Pressable
-          onPress={() => router.navigate("/(tabs)/memory")}
-          style={styles.memoryBtn}
-          hitSlop={8}
-          testID="memory-btn"
-        >
-          <Ionicons
-            name="layers-outline"
-            size={20}
-            color={memory.length > 0 ? C.accent : C.textTertiary}
-          />
-          {memory.length > 0 && <View style={styles.memoryBadge} />}
-        </Pressable>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          {/* Skill Chip */}
+          <Pressable
+            onPress={() => setShowSkillPicker(true)}
+            style={styles.skillChip}
+            hitSlop={6}
+          >
+            <View style={[
+              styles.skillChipDot,
+              { backgroundColor: activeSkillId
+                ? (DOMAIN_CONFIG[detectedSkill?.primary || ""] ?.color ?? C.accent)
+                : C.textTertiary },
+            ]} />
+            <Text
+              style={[styles.skillChipText, activeSkillId && { color: C.text }]}
+              numberOfLines={1}
+            >
+              {detectedSkill?.wasAutoDetected && !activeSkillId && (
+                <Text style={{ color: C.accentWarm }}>✦ </Text>
+              )}
+              {activeSkillId
+                ? (detectedSkill?.skillName || "Skill")
+                : (detectedSkill?.skillName
+                  ? detectedSkill.skillName
+                  : "General")}
+            </Text>
+            <Ionicons name="chevron-down" size={10} color={C.textTertiary} />
+          </Pressable>
+
+          {/* Memory Button */}
+          <Pressable
+            onPress={() => router.navigate("/(tabs)/memory")}
+            style={styles.memoryBtn}
+            hitSlop={8}
+            testID="memory-btn"
+          >
+            <Ionicons
+              name="layers-outline"
+              size={20}
+              color={memory.length > 0 ? C.accent : C.textTertiary}
+            />
+            {memory.length > 0 && <View style={styles.memoryBadge} />}
+          </Pressable>
+        </View>
       </View>
 
       {/* KeyboardAvoidingView wraps messages + input so they lift above keyboard */}
@@ -2066,6 +2343,13 @@ export default function ChatScreen() {
           onClose={() => setShowConfidencePopup(null)}
         />
       )}
+      <SkillPickerSheet
+        visible={showSkillPicker}
+        skillsByDomain={skillsByDomain}
+        activeSkillId={activeSkillId}
+        onSelect={setActiveSkillId}
+        onClose={() => setShowSkillPicker(false)}
+      />
     </View>
   );
 }
@@ -2130,6 +2414,19 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: C.accent,
   },
+  skillChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: C.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  skillChipDot: { width: 7, height: 7, borderRadius: 4 },
+  skillChipText: { fontSize: 12, fontFamily: "Inter_500Medium", color: C.textTertiary, maxWidth: 100 },
 
   listContent: { paddingHorizontal: 16, paddingTop: 8 },
 
