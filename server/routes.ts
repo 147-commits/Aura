@@ -65,8 +65,25 @@ import {
   memoryRateLimit,
   budgetCheck,
 } from "./middleware";
-import { selectModel, trackCompletion, getBackgroundModel } from "./model-router";
+import { selectModel, trackCompletion, getBackgroundModel, type ModelTier } from "./model-router";
 import { createStream, getOpenAI } from "./ai-provider";
+import { validateConfidenceInResponse } from "./confidence-calibrator";
+
+// ── Performance Logger ──────────────────────────────────────────────────────
+
+const COST_PER_1M_INPUT: Record<string, number> = {
+  "gpt-4o-mini": 0.15,
+  "gpt-4o": 1.0,
+  "claude-sonnet-4-20250514": 3.0,
+};
+
+function perfLog(data: Record<string, unknown>) {
+  console.log(`[perf] ${JSON.stringify(data)}`);
+}
+
+function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
 
 const openai = getOpenAI();
 
@@ -189,8 +206,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const lastUserMessage = [...messages].reverse().find((m: any) => m.role === "user")?.content || "";
+      const requestStart = Date.now();
 
       // ─── Memory + conversation setup ───────────────────────────────
+      const memoryStart = Date.now();
       let conversationId: string | null = null;
       let dbMemory: { text: string; category: string }[] = clientMemory;
 
@@ -199,6 +218,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const memories = await getMemories(userId);
         dbMemory = memories.map((m: any) => ({ text: m.text, category: m.category }));
       }
+      perfLog({ step: "memory-retrieval", ms: Date.now() - memoryStart });
 
       // ─── Parallel detection: mode + domain (runs simultaneously) ───
       const detectionStart = Date.now();
@@ -223,6 +243,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let mode: ChatMode = detectedMode;
       const detectionMs = Date.now() - detectionStart;
+      perfLog({ step: "parallel-detection", ms: detectionMs, mode, domain: skillRoute.primary, layer: skillRoute.layer });
 
       if (needsModeDetect) {
         res.write(`data: ${JSON.stringify({ type: "mode", mode })}\n\n`);
@@ -310,6 +331,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const isTriage = detectStressSignals(lastUserMessage);
+      const promptStart = Date.now();
       const systemPrompt = chainedPromptOverride
         ? buildTruthSystemPrompt(mode, explainLevel, dbMemory, { isTriage }) +
           "\n\n---\nACTIVE DOMAIN EXPERTISE:\n" + chainedPromptOverride
@@ -318,6 +340,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             activeSkill,
             skillContext,
           });
+      perfLog({ step: "prompt-build", ms: Date.now() - promptStart, skill: activeSkill?.id || null });
+
+      // ─── Token & cost audit ────────────────────────────────────────
+      const promptTokens = estimateTokens(systemPrompt);
+      perfLog({ event: "prompt-tokens", estimated: promptTokens, skill: activeSkill?.id || null });
+      if (promptTokens > 3000) {
+        console.warn(`[token-audit] System prompt exceeds 3000 tokens: ~${promptTokens} (skill: ${activeSkill?.id || "none"})`);
+      }
 
       // ─── Research mode ─────────────────────────────────────────────
       if (mode === "research") {
@@ -410,6 +440,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (userId) trackCompletion(userId, lastUserMessage, fullContent, modelConfig.tier);
+
+      // ─── Confidence monitoring ─────────────────────────────────────
+      if (activeSkill && confidence) {
+        const validation = validateConfidenceInResponse(fullContent, activeSkill.domain);
+        if (!validation.isAppropriate) {
+          perfLog({ event: "confidence-overclaim", skill: activeSkill.id, claimed: validation.claimed, warning: validation.warning });
+        }
+      }
+
+      // ─── Cost estimate ─────────────────────────────────────────────
+      const totalInputTokens = promptTokens + estimateTokens(lastUserMessage);
+      const outputTokens = estimateTokens(fullContent);
+      const costRate = COST_PER_1M_INPUT[modelConfig.model] || 0.15;
+      const estimatedCostUSD = ((totalInputTokens + outputTokens) / 1_000_000) * costRate;
+      const totalMs = Date.now() - requestStart;
+
+      perfLog({
+        step: "request-complete",
+        totalMs,
+        model: modelConfig.model,
+        tier: modelConfig.tier,
+        reason: modelConfig.reason,
+        skill: activeSkill?.id || null,
+        estimatedInputTokens: totalInputTokens,
+        estimatedOutputTokens: outputTokens,
+        estimatedCostUSD: +estimatedCostUSD.toFixed(6),
+      });
 
       res.write("data: [DONE]\n\n");
       res.end();
@@ -752,12 +809,14 @@ Keep each field under 15 words. Be specific and personal. Never invent facts you
 
   // ─── SKILLS ───────────────────────────────────────────────────────────
   app.get("/api/skills", requireAuth, (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=3600");
     res.json(getGroupedSkills());
   });
 
   app.get("/api/skills/:id", requireAuth, (req, res) => {
     const skill = getSkill(req.params.id);
     if (!skill) return res.status(404).json({ error: "Skill not found" });
+    res.setHeader("Cache-Control", "public, max-age=3600");
     res.json(buildSkillSummary(skill));
   });
 
