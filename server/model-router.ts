@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import type { ChatMode } from "./truth-engine";
+import type { SkillDomain } from "./skill-engine";
 import { trackTokenUsage } from "./middleware";
 
 /**
@@ -8,6 +9,8 @@ import { trackTokenUsage } from "./middleware";
  * Strategy:
  * - Simple chat, casual questions → gpt-4o-mini (~10x cheaper)
  * - Complex analysis, research, decision-making → gpt-4o
+ * - Domain skill active or chained → gpt-4o (measurably better results)
+ * - Triage mode → gpt-4o-mini (short, structured responses)
  * - Memory extraction, action detection, mode detection → gpt-4o-mini (background tasks)
  *
  * This is the single most important cost optimization.
@@ -16,44 +19,122 @@ import { trackTokenUsage } from "./middleware";
  */
 
 export type ModelTier = "mini" | "standard";
+export type ModelSelectionReason =
+  | "domain-skill-active"
+  | "domain-skill-chained"
+  | "mode-based"
+  | "triage"
+  | "background";
 
 export interface ModelConfig {
   model: string;
   maxTokens: number;
   tier: ModelTier;
+  reason: ModelSelectionReason;
+  estimatedCost: number;
 }
 
-const MODELS: Record<ModelTier, ModelConfig> = {
-  mini: {
-    model: "gpt-4o-mini",
-    maxTokens: 4096,
-    tier: "mini",
-  },
-  standard: {
-    model: "gpt-4o",
-    maxTokens: 4096,
-    tier: "standard",
-  },
+export interface SkillModelOptions {
+  activeSkillDomain?: SkillDomain;
+  isChained?: boolean;
+  isTriage?: boolean;
+}
+
+// ── Cost Constants ──────────────────────────────────────────────────────────
+/** Cost per 1K tokens (blended input+output estimate) */
+const GPT4O_COST_PER_1K = 0.005;
+const GPT4O_MINI_COST_PER_1K = 0.00015;
+/** Default estimated tokens per request (prompt + response) */
+const DEFAULT_REQUEST_TOKENS = 2000;
+/** Monthly cost warning threshold per user (USD) */
+const MONTHLY_COST_WARN_THRESHOLD = 50;
+
+const BASE_MODELS: Record<ModelTier, { model: string; maxTokens: number }> = {
+  mini: { model: "gpt-4o-mini", maxTokens: 4096 },
+  standard: { model: "gpt-4o", maxTokens: 4096 },
 };
 
+// ── Monthly Cost Tracking ───────────────────────────────────────────────────
+const monthlyCosts = new Map<string, { cost: number; month: string }>();
+
+/** Track estimated cost and warn if projected monthly spend exceeds threshold */
+function checkMonthlyCostGuard(userId: string, estimatedCost: number): void {
+  const month = new Date().toISOString().slice(0, 7); // "2026-03"
+  const key = `monthly:${userId}`;
+  let entry = monthlyCosts.get(key);
+
+  if (!entry || entry.month !== month) {
+    entry = { cost: 0, month };
+    monthlyCosts.set(key, entry);
+  }
+
+  entry.cost += estimatedCost;
+
+  if (entry.cost > MONTHLY_COST_WARN_THRESHOLD) {
+    console.warn(
+      `[cost-guard] User ${userId} projected monthly cost: $${entry.cost.toFixed(2)} ` +
+      `(exceeds $${MONTHLY_COST_WARN_THRESHOLD} threshold)`
+    );
+  }
+}
+
+/** Estimate USD cost for a given model and token count */
+function estimateCost(tier: ModelTier, tokens: number = DEFAULT_REQUEST_TOKENS): number {
+  const rate = tier === "standard" ? GPT4O_COST_PER_1K : GPT4O_MINI_COST_PER_1K;
+  return (tokens / 1000) * rate;
+}
+
+/** Build a ModelConfig with cost estimate */
+function buildConfig(tier: ModelTier, reason: ModelSelectionReason): ModelConfig {
+  const base = BASE_MODELS[tier];
+  return {
+    ...base,
+    tier,
+    reason,
+    estimatedCost: estimateCost(tier),
+  };
+}
+
 /**
- * Select the appropriate model based on the chat mode and message complexity.
+ * Select the appropriate model based on chat mode, message complexity, and active skills.
+ *
+ * Priority order:
+ *   1. Triage mode → mini (short structured responses, cost-efficient)
+ *   2. Chained skills → standard (multi-domain needs full model capability)
+ *   3. Active domain skill → standard (domain expertise benefits from gpt-4o)
+ *   4. Mode-based → existing logic (research/decision → standard, else complexity check)
  */
-export function selectModel(mode: ChatMode, message: string): ModelConfig {
-  // Research and decision modes always get the standard model —
-  // accuracy matters more than cost for these
+export function selectModel(
+  mode: ChatMode,
+  message: string,
+  options?: SkillModelOptions
+): ModelConfig {
+  // Triage mode: always mini — short, structured, cost-efficient
+  if (options?.isTriage) {
+    return buildConfig("mini", "triage");
+  }
+
+  // Chained skills (primary + secondary): always standard
+  if (options?.isChained) {
+    return buildConfig("standard", "domain-skill-chained");
+  }
+
+  // Active domain skill: upgrade to standard for better domain reasoning
+  if (options?.activeSkillDomain) {
+    return buildConfig("standard", "domain-skill-active");
+  }
+
+  // Existing mode-based logic (no behavior change)
   if (mode === "research" || mode === "decision") {
-    return MODELS.standard;
+    return buildConfig("standard", "mode-based");
   }
 
-  // For other modes, classify based on message complexity
   const complexity = estimateComplexity(message);
-
   if (complexity === "high") {
-    return MODELS.standard;
+    return buildConfig("standard", "mode-based");
   }
 
-  return MODELS.mini;
+  return buildConfig("mini", "mode-based");
 }
 
 /**
@@ -61,7 +142,7 @@ export function selectModel(mode: ChatMode, message: string): ModelConfig {
  * These always use the cheapest model since they're not user-facing.
  */
 export function getBackgroundModel(): string {
-  return MODELS.mini.model;
+  return BASE_MODELS.mini.model;
 }
 
 /**
@@ -132,8 +213,16 @@ export function estimateTokens(text: string): number {
 
 /**
  * Track usage after a completion and return whether user is within budget.
+ * Also checks monthly cost guard for the model tier used.
  */
-export function trackCompletion(userId: string, promptText: string, responseText: string): boolean {
+export function trackCompletion(
+  userId: string,
+  promptText: string,
+  responseText: string,
+  tier: ModelTier = "mini"
+): boolean {
   const estimatedTokens = estimateTokens(promptText) + estimateTokens(responseText);
+  const cost = estimateCost(tier, estimatedTokens);
+  checkMonthlyCostGuard(userId, cost);
   return trackTokenUsage(userId, estimatedTokens);
 }

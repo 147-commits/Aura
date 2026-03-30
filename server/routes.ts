@@ -353,8 +353,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // ─── Standard chat mode with model routing ─────────────────────
-      const modelConfig = selectModel(mode, lastUserMessage);
-      res.write(`data: ${JSON.stringify({ type: "model_tier", tier: modelConfig.tier })}\n\n`);
+      const modelConfig = selectModel(mode, lastUserMessage, {
+        activeSkillDomain: activeSkill?.domain,
+        isChained: !!chainedPromptOverride,
+        isTriage,
+      });
+      res.write(`data: ${JSON.stringify({ type: "model_tier", tier: modelConfig.tier, reason: modelConfig.reason })}\n\n`);
 
       const openaiMessages: any[] = [{ role: "system", content: systemPrompt }];
 
@@ -418,7 +422,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await conversationHeartbeat(conversationId);
       }
 
-      if (userId) trackCompletion(userId, lastUserMessage, fullContent);
+      if (userId) trackCompletion(userId, lastUserMessage, fullContent, modelConfig.tier);
 
       res.write("data: [DONE]\n\n");
       res.end();
