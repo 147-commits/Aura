@@ -106,6 +106,32 @@ export interface DailyPlan {
   createdAt: string;
 }
 
+// ─── Skills ─────────────────────────────────────────────────────────────
+export type SkillDomain =
+  | "engineering"
+  | "marketing"
+  | "product"
+  | "finance"
+  | "leadership"
+  | "operations";
+
+export interface SkillSummary {
+  id: string;
+  name: string;
+  domain: SkillDomain;
+  icon: string;
+  description: string;
+}
+
+// ─── Chat Request ───────────────────────────────────────────────────────
+export interface ChatRequest {
+  message: string;
+  mode?: ChatMode;
+  explainLevel?: ExplainLevel;
+  isPrivate?: boolean;
+  activeSkillId?: string;
+}
+
 // ─── API Response Types ──────────────────────────────────────────────────
 export interface ApiError {
   error: string;

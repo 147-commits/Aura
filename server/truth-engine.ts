@@ -1,8 +1,17 @@
 import OpenAI from "openai";
+import type { SkillDefinition } from "./skill-engine";
 
 export type Confidence = "High" | "Medium" | "Low";
 export type ExplainLevel = "simple" | "normal" | "expert";
 export type ChatMode = "chat" | "research" | "decision" | "brainstorm" | "explain";
+
+/** Optional context passed alongside an active skill */
+export interface SkillContext {
+  /** User's message that triggered the skill */
+  userMessage?: string;
+  /** IDs of chained skills to mention as available */
+  chainedSkillIds?: string[];
+}
 
 export interface TruthResponse {
   content: string;
@@ -269,22 +278,105 @@ RESPONSE STYLE (Explain Mode):
 Confidence: High|Medium|Low`,
 };
 
+/**
+ * Validates that a skill injection doesn't attempt to override Aura's core principles.
+ * Blocks prompt injection attempts that try to bypass safety, confidence, or truth rules.
+ */
+function validateSkillInjection(injection: string): boolean {
+  const forbidden = [
+    "ignore previous",
+    "override aura",
+    "disregard",
+    "forget your rules",
+    "skip confidence",
+    "no confidence rating",
+    "you can hallucinate",
+  ];
+  return !forbidden.some((f) => injection.toLowerCase().includes(f));
+}
+
+/**
+ * Builds the domain expertise prompt section from an active skill and optional context.
+ * Returns the formatted string to append, or empty string if no skill is active.
+ */
+function buildSkillPrompt(skill: SkillDefinition, context?: SkillContext): string {
+  const parts: string[] = [];
+
+  parts.push(`You are augmented with **${skill.name}** expertise (${skill.domain} domain).`);
+  parts.push("");
+  parts.push(skill.systemPrompt);
+  parts.push("");
+  parts.push("DOMAIN-SPECIFIC CONFIDENCE RULES (use these IN ADDITION to Aura's base confidence rules):");
+  parts.push(`→ High: ${skill.confidenceRules.high}`);
+  parts.push(`→ Medium: ${skill.confidenceRules.medium}`);
+  parts.push(`→ Low: ${skill.confidenceRules.low}`);
+
+  if (context?.chainedSkillIds && context.chainedSkillIds.length > 0) {
+    parts.push("");
+    parts.push(`Related expertise available: ${context.chainedSkillIds.join(", ")}. Mention these if the user's question spans multiple domains.`);
+  }
+
+  return parts.join("\n");
+}
+
+/**
+ * Composes the full system prompt for Aura's truth engine.
+ *
+ * Composition order (sacred — do not change):
+ *   1. AURA_CORE (via mode template — always first)
+ *   2. Mode template (chat/research/decision/brainstorm/explain)
+ *   3. Explain level instruction
+ *   4. Memory section
+ *   5. Triage section (if applicable)
+ *   6. Skill section (LAST — appended after everything else)
+ *
+ * Example composed structure for mode=decision, skill=engineering-architect, with 2 memories:
+ *   [AURA_CORE + Decision Mode template]
+ *   Communication level: [expert instruction]
+ *   Known context about this person:
+ *     → [preference] Prefers TypeScript
+ *     → [project] Building a SaaS platform
+ *   ---
+ *   ACTIVE DOMAIN EXPERTISE:
+ *   [Senior Architect skill prompt + confidence rules]
+ */
 export function buildTruthSystemPrompt(
   mode: ChatMode,
   explainLevel: ExplainLevel,
   memory: { text: string; category: string }[],
-  options?: { isTriage?: boolean }
+  options?: {
+    isTriage?: boolean;
+    activeSkill?: SkillDefinition;
+    skillContext?: SkillContext;
+  }
 ): string {
+  // 1 + 2. AURA_CORE is embedded inside each mode template
   const modePrompt = MODE_TEMPLATES[mode];
+
+  // 3. Explain level
   const levelInstruction = EXPLAIN_LEVEL_INSTRUCTIONS[explainLevel];
+
+  // 4. Memory
   const memorySection = memory.length > 0
     ? `\n\nKnown context about this person (use to personalize and be more helpful):\n${memory.map((m) => `→ [${m.category}] ${m.text}`).join("\n")}`
     : "";
+
+  // 5. Triage
   const triageSection = options?.isTriage ? `\n\nIMPORTANT OVERRIDE — TRIAGE MODE:\n${TRIAGE_INSTRUCTION}` : "";
+
+  // 6. Skill (always last)
+  let skillSection = "";
+  if (options?.activeSkill) {
+    const injection = buildSkillPrompt(options.activeSkill, options.skillContext);
+    if (!validateSkillInjection(injection)) {
+      throw new Error("Invalid skill injection blocked");
+    }
+    skillSection = `\n\n---\nACTIVE DOMAIN EXPERTISE:\n${injection}`;
+  }
 
   return `${modePrompt}
 
-Communication level: ${levelInstruction}${memorySection}${triageSection}`;
+Communication level: ${levelInstruction}${memorySection}${triageSection}${skillSection}`;
 }
 
 export function parseConfidence(content: string): { cleanContent: string; confidence: Confidence; confidenceReason: string } {
