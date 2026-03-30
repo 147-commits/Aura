@@ -332,10 +332,10 @@ function DocumentDownloadButton({ documentRequest, deviceId }: { documentRequest
           URL.revokeObjectURL(blobUrl);
         }
       } else {
-        const FileSystem = await import("expo-file-system");
+        const LegacyFS = await import("expo-file-system/legacy");
         const Sharing = await import("expo-sharing");
         const filename = documentRequest.filename || "aura-export.pdf";
-        const fileUri = FileSystem.documentDirectory + filename;
+        const fileUri = LegacyFS.documentDirectory + filename;
         const resp = await fetch(url.toString(), {
           method: "POST",
           headers: apiHeaders(deviceId),
@@ -346,8 +346,8 @@ function DocumentDownloadButton({ documentRequest, deviceId }: { documentRequest
           const base64 = btoa(
             String.fromCharCode(...new Uint8Array(arrayBuf))
           );
-          await FileSystem.writeAsStringAsync(fileUri, base64, {
-            encoding: FileSystem.EncodingType.Base64,
+          await LegacyFS.writeAsStringAsync(fileUri, base64, {
+            encoding: LegacyFS.EncodingType.Base64,
           });
           if (await Sharing.isAvailableAsync()) {
             await Sharing.shareAsync(fileUri, {
