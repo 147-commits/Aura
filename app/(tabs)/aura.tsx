@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
   Alert,
   ActionSheetIOS,
   Image,
+  Animated as RNAnimated,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
@@ -1375,6 +1376,53 @@ export default function ChatScreen() {
   const flatListRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
 
+  // ─── Orb Thinking Animation ─────────────────────────────────────────
+  const orbPulse = useRef(new RNAnimated.Value(0)).current;
+  const orbAnimRef = useRef<RNAnimated.CompositeAnimation | null>(null);
+  const skillChipGlow = useRef(new RNAnimated.Value(0)).current;
+
+  const isSkillThinking = isSending && !!activeSkillId;
+
+  useEffect(() => {
+    if (isSkillThinking) {
+      const loop = RNAnimated.loop(
+        RNAnimated.sequence([
+          RNAnimated.timing(orbPulse, { toValue: 1, duration: 900, useNativeDriver: false }),
+          RNAnimated.timing(orbPulse, { toValue: 0, duration: 900, useNativeDriver: false }),
+        ])
+      );
+      orbAnimRef.current = loop;
+      loop.start();
+    } else {
+      orbAnimRef.current?.stop();
+      RNAnimated.timing(orbPulse, { toValue: 0, duration: 300, useNativeDriver: false }).start();
+    }
+    return () => { orbAnimRef.current?.stop(); };
+  }, [isSkillThinking]);
+
+  const orbColor = useMemo(() => orbPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [C.accent, C.accentWarm],
+  }), []);
+
+  const orbOpacity = useMemo(() => orbPulse.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0.6, 1, 0.6],
+  }), []);
+
+  const orbScale = useMemo(() => orbPulse.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [1, 1.04, 1],
+  }), []);
+
+  // Flash skill chip amber on High confidence with active skill
+  const flashSkillChipGlow = useCallback(() => {
+    RNAnimated.sequence([
+      RNAnimated.timing(skillChipGlow, { toValue: 1, duration: 100, useNativeDriver: false }),
+      RNAnimated.timing(skillChipGlow, { toValue: 0, duration: 100, useNativeDriver: false }),
+    ]).start();
+  }, []);
+
   useEffect(() => {
     const interval = setInterval(() => {
       setPlaceholderIndex((prev) => (prev + 1) % ROTATING_PLACEHOLDERS.length);
@@ -1893,6 +1941,11 @@ export default function ChatScreen() {
         timestamp: Date.now(),
       };
 
+      // Flash skill chip on High confidence + active skill
+      if (finalConfidence === "High" && (activeSkillId || finalSkillName)) {
+        flashSkillChipGlow();
+      }
+
       setMessages((latest) => {
         const withoutPrompt = latest.filter((m) => m.type !== "memory-prompt");
         const updated = [...withoutPrompt, assistantMsg];
@@ -2066,11 +2119,25 @@ export default function ChatScreen() {
       {/* Header — stays fixed, outside KeyboardAvoidingView */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <View style={styles.headerAvatar}>
-            <View style={styles.headerAvatarMiddle}>
-              <View style={styles.headerAvatarCore} />
-            </View>
-          </View>
+          <RNAnimated.View style={[
+            styles.headerAvatar,
+            isSkillThinking && {
+              borderColor: orbColor,
+              transform: [{ scale: orbScale }],
+            },
+          ]}>
+            <RNAnimated.View style={[
+              styles.headerAvatarMiddle,
+              isSkillThinking && { borderColor: orbColor },
+            ]}>
+              <RNAnimated.View style={[
+                styles.headerAvatarCore,
+                isSkillThinking
+                  ? { backgroundColor: orbColor, shadowColor: orbColor, opacity: orbOpacity }
+                  : {},
+              ]} />
+            </RNAnimated.View>
+          </RNAnimated.View>
           <View>
             <Text style={styles.headerTitle}>Aura</Text>
             <View style={styles.headerStatusRow}>
@@ -2081,6 +2148,11 @@ export default function ChatScreen() {
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           {/* Skill Chip */}
+          <RNAnimated.View style={{
+            borderRadius: 14,
+            borderWidth: skillChipGlow.interpolate({ inputRange: [0, 1], outputRange: [0, 2] }) as unknown as number,
+            borderColor: skillChipGlow.interpolate({ inputRange: [0, 1], outputRange: ["transparent", C.accentWarm] }) as unknown as string,
+          }}>
           <Pressable
             onPress={() => setShowSkillPicker(true)}
             style={styles.skillChip}
@@ -2107,6 +2179,7 @@ export default function ChatScreen() {
             </Text>
             <Ionicons name="chevron-down" size={10} color={C.textTertiary} />
           </Pressable>
+          </RNAnimated.View>
 
           {/* Memory Button */}
           <Pressable
