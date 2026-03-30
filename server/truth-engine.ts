@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import type { SkillDefinition } from "./skill-engine";
+import { buildCalibrationInstruction } from "./confidence-calibrator";
 
 export type Confidence = "High" | "Medium" | "Low";
 export type ExplainLevel = "simple" | "normal" | "expert";
@@ -310,6 +311,8 @@ function buildSkillPrompt(skill: SkillDefinition, context?: SkillContext): strin
   parts.push(`→ High: ${skill.confidenceRules.high}`);
   parts.push(`→ Medium: ${skill.confidenceRules.medium}`);
   parts.push(`→ Low: ${skill.confidenceRules.low}`);
+  parts.push("");
+  parts.push(buildCalibrationInstruction(skill.domain));
 
   if (context?.chainedSkillIds && context.chainedSkillIds.length > 0) {
     parts.push("");
