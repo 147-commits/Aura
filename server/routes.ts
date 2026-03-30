@@ -1,0 +1,578 @@
+import type { Express } from "express";
+import { createServer, type Server } from "node:http";
+import OpenAI from "openai";
+import multer from "multer";
+import {
+  buildTruthSystemPrompt,
+  parseConfidence,
+  parseDocumentRequest,
+  parseActionItems,
+  detectMode,
+  detectStressSignals,
+  type ChatMode,
+  type ExplainLevel,
+} from "./truth-engine";
+import { generatePDF, type DocumentRequest } from "./document-engine";
+import { runResearch } from "./research-engine";
+import {
+  processAttachment,
+  buildAttachmentContext,
+  type ProcessedAttachment,
+} from "./file-engine";
+import {
+  getOrCreateUser,
+  getOrCreateConversation,
+  getMemories,
+  addMemory,
+  deleteMemory,
+  deleteAllMemories,
+  extractAndSaveMemories,
+  saveMessage,
+  getConversationHistory,
+  saveCitations,
+} from "./memory-engine";
+import {
+  createTask,
+  getTasks,
+  updateTask,
+  deleteTask,
+  createProject,
+  getProjects,
+  updateProject,
+  deleteProject,
+  getDailyPlan,
+  generateDailyPlan,
+  extractActionItems,
+} from "./productivity-engine";
+import {
+  requireAuth,
+  chatRateLimit,
+  researchRateLimit,
+  memoryRateLimit,
+  budgetCheck,
+} from "./middleware";
+import { selectModel, trackCompletion, getBackgroundModel } from "./model-router";
+
+const openai = new OpenAI({
+  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+});
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 5 },
+});
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  // ─── HEALTH ────────────────────────────────────────────────────────────
+  app.get("/api/health", (_req, res) => {
+    res.json({ ok: true, version: "2.1.0" });
+  });
+
+  // ─── CHAT (streaming, truth-first, with model routing) ────────────────
+  app.post("/api/chat", chatRateLimit, budgetCheck, upload.array("attachments", 5), async (req, res) => {
+    try {
+      let body = req.body;
+      if (typeof body.messages === "string") {
+        body = {
+          ...body,
+          messages: JSON.parse(body.messages || "[]"),
+          memory: body.memory ? JSON.parse(body.memory) : [],
+          isPrivate: body.isPrivate === "true",
+          rememberFlag: body.rememberFlag !== "false",
+          autoDetectMode: body.autoDetectMode === "true",
+        };
+      }
+
+      const {
+        messages = [],
+        memory: clientMemory = [],
+        mode: requestedMode,
+        explainLevel = "normal",
+        isPrivate = false,
+        rememberFlag = true,
+        autoDetectMode = false,
+      } = body;
+
+      const userId = req.userId;
+      const files = (req.files as Express.Multer.File[]) || [];
+
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("X-Accel-Buffering", "no");
+      res.flushHeaders();
+
+      let processedAttachments: ProcessedAttachment[] = [];
+      if (files.length > 0) {
+        processedAttachments = await Promise.all(
+          files.map((f) => processAttachment(f.buffer, f.mimetype, f.originalname))
+        );
+        const attachmentSummary = processedAttachments.map((a) => {
+          if (a.type === "image") return { type: "image", filename: a.filename };
+          return { type: "document", filename: a.filename, pageCount: a.pageCount, truncated: a.truncated };
+        });
+        res.write(`data: ${JSON.stringify({ type: "attachment_context", attachments: attachmentSummary })}\n\n`);
+      }
+
+      const lastUserMessage = [...messages].reverse().find((m: any) => m.role === "user")?.content || "";
+
+      let mode: ChatMode = requestedMode || "chat";
+      if (autoDetectMode && !requestedMode) {
+        mode = await detectMode(lastUserMessage, openai);
+        res.write(`data: ${JSON.stringify({ type: "mode", mode })}\n\n`);
+      }
+
+      let conversationId: string | null = null;
+      let dbMemory: { text: string; category: string }[] = clientMemory;
+
+      if (userId) {
+        conversationId = await getOrCreateConversation(userId);
+        const memories = await getMemories(userId);
+        dbMemory = memories.map((m: any) => ({ text: m.text, category: m.category }));
+      }
+
+      const isTriage = detectStressSignals(lastUserMessage);
+      const systemPrompt = buildTruthSystemPrompt(mode, explainLevel, dbMemory, { isTriage });
+
+      // ─── Research mode ─────────────────────────────────────────────
+      if (mode === "research") {
+        const result = await runResearch(lastUserMessage, openai, dbMemory);
+
+        if (result.citations.length > 0) {
+          res.write(`data: ${JSON.stringify({ type: "citations", citations: result.citations })}\n\n`);
+        }
+        res.write(`data: ${JSON.stringify({ type: "confidence", confidence: result.confidence })}\n\n`);
+
+        const words = result.content.split(" ");
+        for (const word of words) {
+          res.write(`data: ${JSON.stringify({ content: word + " " })}\n\n`);
+          await new Promise((r) => setTimeout(r, 12));
+        }
+
+        if (!isPrivate && userId && conversationId) {
+          await saveMessage(conversationId, "user", lastUserMessage, { mode, explainLevel, rememberFlag, isPrivate });
+          const asstMsgId = await saveMessage(conversationId, "assistant", result.content, {
+            mode, confidence: result.confidence, explainLevel, isPrivate: false,
+          });
+          if (result.citations.length > 0) await saveCitations(asstMsgId, result.citations);
+          if (rememberFlag) extractAndSaveMemories(userId, lastUserMessage, openai).catch(console.error);
+        }
+
+        if (userId) trackCompletion(userId, lastUserMessage, result.content);
+
+        res.write("data: [DONE]\n\n");
+        res.end();
+        return;
+      }
+
+      // ─── Standard chat mode with model routing ─────────────────────
+      const modelConfig = selectModel(mode, lastUserMessage);
+      res.write(`data: ${JSON.stringify({ type: "model_tier", tier: modelConfig.tier })}\n\n`);
+
+      const openaiMessages: any[] = [{ role: "system", content: systemPrompt }];
+
+      for (const msg of messages) {
+        if (msg.role === "user" && msg === messages[messages.length - 1] && processedAttachments.length > 0) {
+          const contentParts: any[] = [];
+          const attachContext = buildAttachmentContext(processedAttachments);
+          contentParts.push({ type: "text", text: (attachContext ? attachContext + "\n\n" : "") + msg.content });
+
+          const imageAttachments = processedAttachments.filter((a) => a.type === "image" && a.base64);
+          for (const img of imageAttachments) {
+            contentParts.push({
+              type: "image_url",
+              image_url: { url: `data:${img.mimeType};base64,${img.base64}` },
+            });
+          }
+          openaiMessages.push({ role: "user", content: contentParts });
+        } else {
+          openaiMessages.push(msg);
+        }
+      }
+
+      const stream = await openai.chat.completions.create({
+        model: modelConfig.model,
+        messages: openaiMessages,
+        stream: true,
+        max_completion_tokens: modelConfig.maxTokens,
+      });
+
+      let fullContent = "";
+      let actionMarkerDetected = false;
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content || "";
+        if (content) {
+          fullContent += content;
+          if (fullContent.includes("|||ACTION_ITEMS|||")) actionMarkerDetected = true;
+          if (!actionMarkerDetected) {
+            res.write(`data: ${JSON.stringify({ content })}\n\n`);
+          }
+        }
+      }
+
+      const { cleanContent: preActionContent, actionItems } = parseActionItems(fullContent);
+      const { cleanContent: preConfContent, confidence, confidenceReason } = parseConfidence(preActionContent);
+      const { cleanContent, documentRequest } = parseDocumentRequest(preConfContent);
+
+      res.write(`data: ${JSON.stringify({ type: "confidence", confidence, confidenceReason })}\n\n`);
+      if (documentRequest) res.write(`data: ${JSON.stringify({ type: "document_request", documentRequest })}\n\n`);
+      if (actionItems.length > 0) res.write(`data: ${JSON.stringify({ type: "action_items", actionItems })}\n\n`);
+
+      if (!isPrivate && userId && conversationId) {
+        await saveMessage(conversationId, "user", lastUserMessage, { mode, explainLevel, rememberFlag, isPrivate });
+        await saveMessage(conversationId, "assistant", cleanContent, { mode, confidence, explainLevel });
+        if (rememberFlag) extractAndSaveMemories(userId, lastUserMessage, openai).catch(console.error);
+        await conversationHeartbeat(conversationId);
+      }
+
+      if (userId) trackCompletion(userId, lastUserMessage, fullContent);
+
+      res.write("data: [DONE]\n\n");
+      res.end();
+    } catch (err) {
+      console.error("Chat error:", err);
+      if (!res.headersSent) res.status(500).json({ error: "Failed" });
+      else { res.write("data: [DONE]\n\n"); res.end(); }
+    }
+  });
+
+  // ─── RESEARCH (non-streaming) ──────────────────────────────────────────
+  app.post("/api/research", researchRateLimit, budgetCheck, async (req, res) => {
+    try {
+      const { query: searchQuery, memory: clientMemory = [] } = req.body;
+      const userId = req.userId;
+
+      let dbMemory = clientMemory;
+      if (userId) {
+        const memories = await getMemories(userId);
+        dbMemory = memories.map((m) => ({ text: m.text, category: m.category }));
+      }
+
+      const result = await runResearch(searchQuery, openai, dbMemory);
+      if (userId) trackCompletion(userId, searchQuery, result.content);
+      res.json(result);
+    } catch (err) {
+      console.error("Research error:", err);
+      res.status(500).json({ error: "Research failed" });
+    }
+  });
+
+  // ─── DOCUMENT EXPORT ──────────────────────────────────────────────────
+  app.post("/api/export", async (req, res) => {
+    try {
+      const docRequest: DocumentRequest = req.body;
+      if (!docRequest.title || !docRequest.sections?.length) {
+        return res.status(400).json({ error: "title and sections are required" });
+      }
+      if (docRequest.sections.length > 20) {
+        return res.status(400).json({ error: "Too many sections (max 20)" });
+      }
+      const totalLength = docRequest.sections.reduce((sum, s) => sum + (s.content_markdown?.length || 0), 0);
+      if (totalLength > 50000) {
+        return res.status(400).json({ error: "Content too large (max 50k chars)" });
+      }
+
+      const pdfBuffer = await generatePDF(docRequest);
+      const filename = docRequest.filename || `${docRequest.title.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.setHeader("Content-Length", pdfBuffer.length.toString());
+      res.send(pdfBuffer);
+    } catch (err) {
+      console.error("Export error:", err);
+      res.status(500).json({ error: "Failed to generate document" });
+    }
+  });
+
+  // ─── MESSAGES ─────────────────────────────────────────────────────────
+  app.get("/api/messages", async (req, res) => {
+    try {
+      if (!req.userId) return res.json([]);
+      const conversationId = await getOrCreateConversation(req.userId);
+      const history = await getConversationHistory(conversationId, 50);
+      res.json(history);
+    } catch (err) {
+      console.error("Get messages error:", err);
+      res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+
+  // ─── MEMORIES ─────────────────────────────────────────────────────────
+  app.get("/api/memories", async (req, res) => {
+    try {
+      if (!req.userId) return res.json([]);
+      const memories = await getMemories(req.userId);
+      res.json(memories);
+    } catch (err) {
+      console.error("Get memories error:", err);
+      res.status(500).json({ error: "Failed to fetch memories" });
+    }
+  });
+
+  app.post("/api/memories", requireAuth, memoryRateLimit, async (req, res) => {
+    try {
+      const { text, category = "context", confidence = "High" } = req.body;
+      if (!text) return res.status(400).json({ error: "text is required" });
+
+      const memory = await addMemory(req.userId!, text, category, confidence);
+      res.json(memory);
+    } catch (err) {
+      console.error("Add memory error:", err);
+      res.status(500).json({ error: "Failed to add memory" });
+    }
+  });
+
+  app.delete("/api/memories/:id", requireAuth, async (req, res) => {
+    try {
+      await deleteMemory(req.userId!, req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Delete memory error:", err);
+      res.status(500).json({ error: "Failed to delete memory" });
+    }
+  });
+
+  app.delete("/api/memories", requireAuth, async (req, res) => {
+    try {
+      await deleteAllMemories(req.userId!);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Delete all memories error:", err);
+      res.status(500).json({ error: "Failed to clear memories" });
+    }
+  });
+
+  // ─── EXTRACT MEMORY ───────────────────────────────────────────────────
+  app.post("/api/extract-memory", memoryRateLimit, async (req, res) => {
+    try {
+      const { message, save = false } = req.body;
+
+      const response = await openai.chat.completions.create({
+        model: getBackgroundModel(),
+        messages: [
+          {
+            role: "user",
+            content: `Extract memory-worthy facts from this message. Only extract stable, safe facts (goals, habits, preferences, projects).
+
+Message: "${message}"
+
+Return ONLY valid JSON: {"shouldRemember": boolean, "items": [{"text": "concise fact", "category": "goal|habit|preference|project|context", "confidence": "High|Medium|Low"}]}
+
+If nothing worth remembering: {"shouldRemember": false, "items": []}`,
+          },
+        ],
+        max_completion_tokens: 300,
+      });
+
+      const raw = response.choices[0]?.message?.content?.trim() || "{}";
+      const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      const data = JSON.parse(cleaned);
+
+      if (save && data.shouldRemember && data.items?.length && req.userId) {
+        for (const item of data.items) {
+          await addMemory(req.userId, item.text, item.category, item.confidence || "High");
+        }
+      }
+
+      res.json(data);
+    } catch (err) {
+      res.json({ shouldRemember: false, items: [] });
+    }
+  });
+
+  // ─── DAILY BRIEF ──────────────────────────────────────────────────────
+  app.post("/api/brief", async (req, res) => {
+    try {
+      const { memory: clientMemory = [], recentMessages = [] } = req.body;
+      const userId = req.userId;
+      const hour = new Date().getHours();
+      const period = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+
+      let dbMemory = clientMemory;
+      if (userId) {
+        const memories = await getMemories(userId);
+        if (memories.length > 0) {
+          dbMemory = memories.map((m) => ({ text: m.text, category: m.category }));
+        }
+      }
+
+      const memoryContext = dbMemory.length > 0
+        ? `Memory: ${dbMemory.map((m: any) => m.text).join("; ")}`
+        : "";
+      const chatContext = recentMessages.length > 0
+        ? `Recent conversation themes: ${recentMessages.slice(-6).map((m: any) => m.content).join(" | ")}`
+        : "";
+
+      const response = await openai.chat.completions.create({
+        model: getBackgroundModel(),
+        messages: [
+          {
+            role: "user",
+            content: `Generate a ${period} brief for this person. ${memoryContext} ${chatContext}
+
+Return ONLY valid JSON (no markdown): {"reflection":"one sentence that mirrors something real about them","pattern":"one observation about their week or habits","action":"one concrete small action for today"}
+
+Keep each field under 15 words. Be specific and personal. Never invent facts you don't have.`,
+          },
+        ],
+        max_completion_tokens: 256,
+      });
+
+      const raw = response.choices[0]?.message?.content?.trim() || "{}";
+      const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      res.json({ ...JSON.parse(cleaned), period });
+    } catch (err) {
+      console.error("Brief error:", err);
+      res.status(500).json({
+        reflection: "Every day is data. You're building something.",
+        pattern: "You keep showing up. That's the habit.",
+        action: "One honest conversation today.",
+        period: "day",
+      });
+    }
+  });
+
+  // ─── TASKS ────────────────────────────────────────────────────────────
+  app.get("/api/tasks", async (req, res) => {
+    try {
+      if (!req.userId) return res.json([]);
+      const status = req.query.status as string | undefined;
+      const projectId = req.query.project_id as string | undefined;
+      const tasks = await getTasks(req.userId, { status, projectId });
+      res.json(tasks);
+    } catch (err) {
+      console.error("Get tasks error:", err);
+      res.status(500).json({ error: "Failed to fetch tasks" });
+    }
+  });
+
+  app.post("/api/tasks", requireAuth, async (req, res) => {
+    try {
+      const { title, description, priority, dueDate, projectId } = req.body;
+      if (!title) return res.status(400).json({ error: "title is required" });
+      const task = await createTask(req.userId!, title, description, priority, dueDate, projectId);
+      res.json(task);
+    } catch (err) {
+      console.error("Create task error:", err);
+      res.status(500).json({ error: "Failed to create task" });
+    }
+  });
+
+  app.patch("/api/tasks/:id", requireAuth, async (req, res) => {
+    try {
+      const task = await updateTask(req.userId!, req.params.id, req.body);
+      if (!task) return res.status(404).json({ error: "Task not found" });
+      res.json(task);
+    } catch (err) {
+      console.error("Update task error:", err);
+      res.status(500).json({ error: "Failed to update task" });
+    }
+  });
+
+  app.delete("/api/tasks/:id", requireAuth, async (req, res) => {
+    try {
+      await deleteTask(req.userId!, req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Delete task error:", err);
+      res.status(500).json({ error: "Failed to delete task" });
+    }
+  });
+
+  // ─── PROJECTS ─────────────────────────────────────────────────────────
+  app.get("/api/projects", async (req, res) => {
+    try {
+      if (!req.userId) return res.json([]);
+      const projects = await getProjects(req.userId);
+      res.json(projects);
+    } catch (err) {
+      console.error("Get projects error:", err);
+      res.status(500).json({ error: "Failed to fetch projects" });
+    }
+  });
+
+  app.post("/api/projects", requireAuth, async (req, res) => {
+    try {
+      const { name, description } = req.body;
+      if (!name) return res.status(400).json({ error: "name is required" });
+      const project = await createProject(req.userId!, name, description);
+      res.json(project);
+    } catch (err) {
+      console.error("Create project error:", err);
+      res.status(500).json({ error: "Failed to create project" });
+    }
+  });
+
+  app.patch("/api/projects/:id", requireAuth, async (req, res) => {
+    try {
+      const project = await updateProject(req.userId!, req.params.id, req.body);
+      if (!project) return res.status(404).json({ error: "Project not found" });
+      res.json(project);
+    } catch (err) {
+      console.error("Update project error:", err);
+      res.status(500).json({ error: "Failed to update project" });
+    }
+  });
+
+  app.delete("/api/projects/:id", requireAuth, async (req, res) => {
+    try {
+      await deleteProject(req.userId!, req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Delete project error:", err);
+      res.status(500).json({ error: "Failed to delete project" });
+    }
+  });
+
+  // ─── TODAY / DAILY PLAN ───────────────────────────────────────────────
+  app.get("/api/today", async (req, res) => {
+    try {
+      if (!req.userId) return res.json({ plan: null, tasks: [] });
+      const plan = await getDailyPlan(req.userId);
+      const tasks = await getTasks(req.userId);
+      const pendingTasks = tasks.filter((t) => t.status !== "done");
+      res.json({ plan, tasks: pendingTasks });
+    } catch (err) {
+      console.error("Get today error:", err);
+      res.status(500).json({ error: "Failed to fetch today's plan" });
+    }
+  });
+
+  app.post("/api/today/generate", requireAuth, async (req, res) => {
+    try {
+      const plan = await generateDailyPlan(req.userId!, openai);
+      const tasks = await getTasks(req.userId!);
+      const pendingTasks = tasks.filter((t) => t.status !== "done");
+      res.json({ plan, tasks: pendingTasks });
+    } catch (err) {
+      console.error("Generate plan error:", err);
+      res.status(500).json({ error: "Failed to generate daily plan" });
+    }
+  });
+
+  // ─── EXTRACT ACTION ITEMS ─────────────────────────────────────────────
+  app.post("/api/extract-actions", async (req, res) => {
+    try {
+      const { message, assistantResponse } = req.body;
+      if (!message || !assistantResponse) {
+        return res.status(400).json({ error: "message and assistantResponse are required" });
+      }
+      const items = await extractActionItems(message, assistantResponse, openai);
+      res.json(items);
+    } catch (err) {
+      console.error("Extract actions error:", err);
+      res.status(500).json({ error: "Failed to extract action items" });
+    }
+  });
+
+  const httpServer = createServer(app);
+  return httpServer;
+}
+
+async function conversationHeartbeat(conversationId: string) {
+  try {
+    const { query } = await import("./db");
+    await query("UPDATE conversations SET updated_at = NOW() WHERE id = $1", [conversationId]);
+  } catch {}
+}
