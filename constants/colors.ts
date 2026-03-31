@@ -1,161 +1,144 @@
 /**
- * Aura Design System v3 — Sapphire Prism Palette
+ * Aura Design System v4 — Sage Light
  *
- * Design philosophy: Aura is a personal companion, not a productivity app.
- * The palette feels: intelligent, calm, trustworthy, with moments of warmth.
- * Deep sapphire for clarity. Warm amber for insight. Never cold. Never clinical.
- *
- * Palette rules:
- *   - Never pure black (#000) — causes eye strain and kills depth
- *   - Blue-tinted dark backgrounds for premium depth
- *   - 70/20/10 rule: 70% dark surfaces, 20% sapphire, 10% amber
- *   - All text meets WCAG AA+ contrast on BG_PRIMARY
- *
- * Migration from v2:
- *   - background: #0C1220 → #0A0F1E (deeper, richer space)
- *   - surface: #162032 → #111827 (slightly cooler)
- *   - accent: #3B82F6 → #4F7FFF (Electric Sapphire — more distinctive)
- *   - accentWarm: #FBBF24 → #E8A84C (Wisdom Gold — warmer, less saturated)
- *   - All existing property names preserved as aliases
+ * Warm white. Sage green. Zen clarity.
+ * Aura is a calm, intelligent companion — not a dark terminal.
+ * The palette feels: warm, trustworthy, grounded, alive.
  */
 
-// ─── Foundation Palette ────────────────────────────────────────────────────
-
 const palette = {
-  // Primary: Electric Sapphire — trust, intelligence, clarity
-  sapphire50: "#EFF6FF",
-  sapphire100: "#DBEAFE",
-  sapphire200: "#BFDBFE",
-  sapphire400: "#6B9BFF",
-  sapphire500: "#4F7FFF",      // ← new primary brand
-  sapphire600: "#3B6AE6",
-  sapphire700: "#2A52CC",
-  sapphire900: "#1E3A5F",
+  sage50: "#F5F7F2",
+  sage100: "#EBF0E6",
+  sage200: "#D4DEC9",
+  sage300: "#B5C4A5",
+  sage400: "#8BA574",
+  sage500: "#6B8C54",
+  sage600: "#547042",
+  sage700: "#3D5230",
+  sage800: "#2C3B22",
 
-  // Secondary: Sky — clarity for interactive elements
-  teal400: "#38BDF8",
-  teal500: "#0EA5E9",
+  cream: "#FAFAF5",
+  warmWhite: "#F7F6F1",
+  warmGray50: "#F5F4EF",
+  warmGray100: "#E8E6E1",
+  warmGray200: "#D4D2CD",
+  warmGray300: "#B5B3AE",
+  warmGray400: "#8A8884",
+  warmGray500: "#6B6966",
+  warmGray600: "#52504D",
 
-  // Warm Accent: Wisdom Gold — warmth, illumination
-  amber300: "#FCD34D",
-  amber400: "#E8A84C",         // ← new warm accent
-  amber500: "#D4943F",
-
-  // Creative: Soft Violet — brainstorm/creative modes
-  violet400: "#A78BFA",
-  violet500: "#7C3AED",
-
-  // Semantic
   emerald400: "#6EE7B7",
   emerald500: "#10B981",
   rose400: "#FCA5A5",
   rose500: "#EF4444",
-  warmYellow: "#FCD34D",
+  amber400: "#E8A84C",
+  violet400: "#A78BFA",
+  teal400: "#38BDF8",
 } as const;
 
-// ─── Sapphire Prism Theme ──────────────────────────────────────────────────
+// ─── Sage Light Theme ──────────────────────────────────────────────────────
 
 const dark = {
-  // ─── Backgrounds (layered depth — night sky, never flat black) ───────────
-  background: "#080C18",          // Deep space — deepest layer (chat area focus)
-  backgroundCenter: "#0F1729",    // Orb glow center — radial gradient origin
-  surface: "#111827",             // Elevated surface — cards, modals (BG_SURFACE)
-  surfaceSecondary: "#1A2332",    // Double-elevated — dropdowns, skill picker (BG_SURFACE_2)
-  surfaceTertiary: "#243044",     // Triple-elevated — active states (BG_SURFACE_3)
-  surfaceSidebar: "#0A0E1A",     // Sidebar — slightly lighter than main for separation
+  // ─── Backgrounds ───────────────────────────────────────────────────────
+  background: palette.cream,              // #FAFAF5 — warm cream
+  backgroundCenter: palette.warmWhite,    // #F7F6F1
+  surface: "#FFFFFF",                     // Pure white — cards, bubbles
+  surfaceSecondary: palette.warmGray50,   // #F5F4EF — elevated
+  surfaceTertiary: palette.warmGray100,   // #E8E6E1 — active states
+  surfaceSidebar: palette.warmWhite,      // #F7F6F1
 
   // ─── Borders ───────────────────────────────────────────────────────────
-  border: "#1E2D44",              // Subtle separator
-  borderLight: "#2A3F5F",        // Active/focused border (BORDER_ACTIVE)
+  border: palette.warmGray100,            // #E8E6E1
+  borderLight: palette.warmGray200,       // #D4D2CD
 
-  // ─── Text (WCAG AA+ compliant on #0A0F1E) ─────────────────────────────
-  text: "#E2E8F0",               // Primary readable text (~14:1)
-  textPrimary: "#E2E8F0",       // Alias for text
-  textSecondary: "#94A3B8",     // Subdued labels, metadata (~6.5:1)
-  textTertiary: "#64748B",      // Placeholder, disabled (~3.8:1)
+  // ─── Text ──────────────────────────────────────────────────────────────
+  text: "#1A1A1A",                        // Near-black
+  textPrimary: "#1A1A1A",
+  textSecondary: palette.warmGray500,     // #6B6966
+  textTertiary: palette.warmGray400,      // #8A8884
 
-  // ─── Brand Accents ─────────────────────────────────────────────────────
-  accent: "#4F7FFF",                      // Electric Sapphire — primary brand
-  accentHover: palette.sapphire400,       // #6B9BFF — hover state
-  accentSecondary: palette.teal400,       // #38BDF8 — secondary interactive
-  accentWarm: "#E8A84C",                  // Wisdom Gold — insight moments
-  accentCreative: palette.violet400,      // #A78BFA — creative/brainstorm mode
+  // ─── Brand Accents (Sage Green) ────────────────────────────────────────
+  accent: palette.sage500,                // #6B8C54 — primary brand
+  accentHover: palette.sage400,           // #8BA574
+  accentSecondary: palette.sage600,       // #547042
+  accentWarm: palette.amber400,           // #E8A84C
+  accentCreative: palette.violet400,      // #A78BFA
 
   // ─── Glows ─────────────────────────────────────────────────────────────
-  accentGlow: "rgba(79, 127, 255, 0.15)",         // ACCENT_SAPPHIRE_GLOW
-  accentGlowStrong: "rgba(79, 127, 255, 0.25)",   // Orb ambient glow
-  warmGlow: "rgba(232, 168, 76, 0.12)",           // ACCENT_AMBER_GLOW
-  warmGlowStrong: "rgba(232, 168, 76, 0.20)",    // Status dot glow
+  accentGlow: "rgba(107, 140, 84, 0.12)",
+  accentGlowStrong: "rgba(107, 140, 84, 0.20)",
+  warmGlow: "rgba(232, 168, 76, 0.12)",
+  warmGlowStrong: "rgba(232, 168, 76, 0.20)",
 
   // ─── Semantic ──────────────────────────────────────────────────────────
-  success: "#6EE7B7",            // Mint — positive states
-  warning: "#FCD34D",            // Yellow — caution states
-  error: "#FCA5A5",              // Soft red — error states
-  info: "#38BDF8",               // Sky — informational
+  success: palette.sage500,
+  warning: "#E8A84C",
+  error: "#EF4444",
+  info: palette.teal400,
 
   // ─── Confidence Badge Colors ───────────────────────────────────────────
-  confidenceHigh: "#6EE7B7",     // Green
-  confidenceMedium: "#E8A84C",   // Amber (updated from #FBBF24)
-  confidenceLow: "#FCA5A5",      // Red
+  confidenceHigh: palette.sage500,        // Sage green
+  confidenceMedium: "#E8A84C",            // Amber
+  confidenceLow: "#EF4444",               // Red
 
-  // ─── Domain Skill Colors (skill picker UI) ─────────────────────────────
-  domainEngineering: "#38BDF8",  // Sky blue
-  domainMarketing: "#F472B6",    // Pink
-  domainProduct: "#A78BFA",      // Violet
-  domainFinance: "#6EE7B7",      // Mint
-  domainLeadership: "#E8A84C",   // Amber
-  domainOperations: "#94A3B8",   // Slate
+  // ─── Domain Skill Colors ───────────────────────────────────────────────
+  domainEngineering: "#38BDF8",
+  domainMarketing: "#F472B6",
+  domainProduct: "#A78BFA",
+  domainFinance: "#6EE7B7",
+  domainLeadership: "#E8A84C",
+  domainOperations: palette.warmGray400,
 
   // ─── Gradients ─────────────────────────────────────────────────────────
-  gradientThinking: ["#4F7FFF", "#E8A84C"] as readonly [string, string],
-  gradientHero: ["#E2E8F0", "#4F7FFF", "#E8A84C"] as readonly [string, string, string],
-  gradientSurface: ["#111827", "#0A0F1E"] as readonly [string, string],
+  gradientThinking: [palette.sage500, palette.sage300] as readonly [string, string],
+  gradientHero: ["#1A1A1A", palette.sage500, palette.sage300] as readonly [string, string, string],
+  gradientSurface: [palette.warmWhite, palette.cream] as readonly [string, string],
 
   // ─── Shadows ───────────────────────────────────────────────────────────
-  shadowSm: "rgba(0,0,0,0.3)",
-  shadowMd: "rgba(0,0,0,0.5)",
-  shadowGlowAccent: "rgba(79, 127, 255, 0.2)",
+  shadowSm: "rgba(0,0,0,0.06)",
+  shadowMd: "rgba(0,0,0,0.10)",
+  shadowGlowAccent: "rgba(107, 140, 84, 0.15)",
 
   // ─── Tab Bar ───────────────────────────────────────────────────────────
-  tint: "#4F7FFF",
-  tabIconDefault: "#64748B",
-  tabIconSelected: "#4F7FFF",
+  tint: palette.sage500,
+  tabIconDefault: palette.warmGray400,
+  tabIconSelected: palette.sage500,
 
   // ─── Chat-specific ─────────────────────────────────────────────────────
-  userBubble: "#4F7FFF",           // Gradient start — user bubble
-  userBubbleEnd: "#3B6FEF",        // Gradient end — user bubble
-  assistantBubble: "#141E30",      // Gradient start — assistant bubble (alive, not grey)
-  assistantBubbleEnd: "#1A2540",   // Gradient end — assistant bubble
-  assistantBubbleBorder: "rgba(79, 127, 255, 0.12)",  // Subtle sapphire tint
-  assistantBubbleAccent: "rgba(79, 127, 255, 0.4)",   // Left border accent
-  streamingCursor: palette.sapphire400,
+  userBubble: palette.sage500,
+  userBubbleEnd: palette.sage600,
+  assistantBubble: "#FFFFFF",
+  assistantBubbleEnd: palette.warmGray50,
+  assistantBubbleBorder: palette.warmGray100,
+  assistantBubbleAccent: "rgba(107, 140, 84, 0.3)",
+  streamingCursor: palette.sage400,
 
   // ─── Mode Accents ──────────────────────────────────────────────────────
-  modeChat: "#4F7FFF",
-  modeResearch: palette.teal500,
+  modeChat: palette.sage500,
+  modeResearch: palette.teal400,
   modeBrainstorm: palette.violet400,
-  modeDecision: "#E8A84C",
-  modeExplain: palette.emerald400,
+  modeDecision: palette.amber400,
+  modeExplain: palette.emerald500,
 
   // ─── Priority Colors ──────────────────────────────────────────────────
-  priorityHigh: "#FCA5A5",
-  priorityMedium: "#E8A84C",
-  priorityLow: "#64748B",
+  priorityHigh: palette.rose400,
+  priorityMedium: palette.amber400,
+  priorityLow: palette.warmGray400,
 
-  // ─── Project Palette (cycle through for new projects) ──────────────────
+  // ─── Project Palette ──────────────────────────────────────────────────
   projectColors: [
-    "#4F7FFF",           // Electric Sapphire
-    "#A78BFA",           // Violet
-    "#38BDF8",           // Sky
-    "#6EE7B7",           // Mint
-    "#E8A84C",           // Amber
-    "#FCA5A5",           // Rose
-    "#F472B6",           // Pink
-    "#818CF8",           // Indigo
+    palette.sage500,
+    palette.violet400,
+    palette.teal400,
+    palette.emerald400,
+    palette.amber400,
+    palette.rose400,
+    "#F472B6",
+    "#818CF8",
   ] as readonly string[],
 } as const;
 
-// ─── Domain Color Lookup (typed for skill-engine SkillDomain) ──────────────
+// ─── Domain Color Lookup ──────────────────────────────────────────────────
 
 export const DOMAIN_COLORS: Record<string, string> = {
   engineering: dark.domainEngineering,
@@ -166,9 +149,6 @@ export const DOMAIN_COLORS: Record<string, string> = {
   operations: dark.domainOperations,
 };
 
-// ─── Exports ────────────────────────────────────────────────────────────────
-
-// Export both ways for backward compatibility
 export default {
   dark,
   ...dark,
