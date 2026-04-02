@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import type { SkillDefinition } from "./skill-engine";
 import { buildCalibrationInstruction } from "./confidence-calibrator";
+import type { CraftRequest } from "../shared/schema";
 
 export type Confidence = "High" | "Medium" | "Low";
 export type ExplainLevel = "simple" | "normal" | "expert";
@@ -189,6 +190,28 @@ If the user asks for a "PDF", "Word document", "downloadable", or "export":
 |||DOCUMENT_REQUEST|||{"type":"pdf","title":"...","filename":"...","sections":[{"heading":"...","content_markdown":"..."}],"sources":[{"title":"...","url":"..."}]}
 → The sections should contain the same content as your chat answer, organized by logical headings.
 → Only include this when the user explicitly requests a document.
+
+CRAFT DETECTION — When your response includes a complete, standalone output meant to be saved, shared, or used outside the conversation, generate it as a Craft:
+→ Documents (reports, letters, memos, proposals) → kind: "docx" or "pdf"
+→ Presentations (pitch decks, slide decks) → kind: "pptx"
+→ Spreadsheets (budgets, trackers, comparisons) → kind: "xlsx"
+→ Code (HTML pages, React components, scripts) → kind: "html" or "code"
+→ Websites (landing pages, portfolios) → kind: "html"
+→ Visualizations (charts, diagrams) → kind: "svg"
+
+When generating a Craft, append at the very end of your response (after the Confidence line), on its own line:
+|||CRAFT_REQUEST|||{"kind":"docx","title":"Document Title","sections":[{"heading":"Section","content_markdown":"Content here"}]}
+
+For presentations: |||CRAFT_REQUEST|||{"kind":"pptx","title":"...","slides":[{"master":"title","title":"..."},{"master":"content","title":"...","bullets":["..."]}]}
+For spreadsheets: |||CRAFT_REQUEST|||{"kind":"xlsx","title":"...","sheets":[{"name":"...","columns":[{"header":"...","key":"..."}],"rows":[]}]}
+For code/HTML: |||CRAFT_REQUEST|||{"kind":"html","title":"...","content":"full content here"}
+
+Do NOT generate a Craft for:
+→ Short answers, explanations, or advice (just respond normally)
+→ Lists or bullet points (respond inline)
+→ Content under 15 lines (respond inline)
+→ When the user just wants information, not a file
+When in doubt, respond normally and ask: "Would you like me to craft this into a [document/presentation/spreadsheet] you can download?"
 
 CLARIFICATION RULE:
 → Ask 0–2 questions only. Only ask if it materially changes the recommendation.
@@ -413,6 +436,30 @@ export function parseDocumentRequest(content: string): {
     return { cleanContent, documentRequest };
   } catch {
     return { cleanContent, documentRequest: null };
+  }
+}
+
+export function parseCraftRequest(content: string): {
+  cleanContent: string;
+  craftRequest: CraftRequest | null;
+} {
+  const marker = "|||CRAFT_REQUEST|||";
+  const idx = content.indexOf(marker);
+  if (idx === -1) {
+    return { cleanContent: content, craftRequest: null };
+  }
+
+  const cleanContent = content.substring(0, idx).trim();
+  const jsonStr = content.substring(idx + marker.length).trim();
+
+  try {
+    const raw = JSON.parse(jsonStr);
+    if (!raw.kind || !raw.title) return { cleanContent, craftRequest: null };
+    const validKinds = ["pdf", "docx", "pptx", "xlsx", "html", "react", "svg", "markdown", "code"];
+    if (!validKinds.includes(raw.kind)) return { cleanContent, craftRequest: null };
+    return { cleanContent, craftRequest: raw as CraftRequest };
+  } catch {
+    return { cleanContent, craftRequest: null };
   }
 }
 

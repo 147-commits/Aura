@@ -6,6 +6,7 @@ import {
   buildTruthSystemPrompt,
   parseConfidence,
   parseDocumentRequest,
+  parseCraftRequest,
   parseActionItems,
   detectMode,
   detectStressSignals,
@@ -413,7 +414,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const content = chunk.content;
         if (content) {
           fullContent += content;
-          if (fullContent.includes("|||ACTION_ITEMS|||")) actionMarkerDetected = true;
+          if (fullContent.includes("|||ACTION_ITEMS|||") || fullContent.includes("|||CRAFT_REQUEST|||")) actionMarkerDetected = true;
           if (!actionMarkerDetected) {
             res.write(`data: ${JSON.stringify({ content })}\n\n`);
           }
@@ -422,7 +423,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { cleanContent: preActionContent, actionItems } = parseActionItems(fullContent);
       const { cleanContent: preConfContent, confidence, confidenceReason } = parseConfidence(preActionContent);
-      const { cleanContent, documentRequest } = parseDocumentRequest(preConfContent);
+      const { cleanContent: preCraftContent, craftRequest } = parseCraftRequest(preConfContent);
+      const { cleanContent, documentRequest } = parseDocumentRequest(preCraftContent);
 
       res.write(`data: ${JSON.stringify({
         type: "confidence",
@@ -432,6 +434,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...(detectedSkill ? { detectedSkill } : {}),
       })}\n\n`);
       if (documentRequest) res.write(`data: ${JSON.stringify({ type: "document_request", documentRequest })}\n\n`);
+      if (craftRequest) res.write(`data: ${JSON.stringify({ type: "craft_request", craftRequest })}\n\n`);
       if (actionItems.length > 0) res.write(`data: ${JSON.stringify({ type: "action_items", actionItems })}\n\n`);
 
       if (!isPrivate && userId && conversationId) {

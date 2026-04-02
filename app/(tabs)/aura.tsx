@@ -66,6 +66,7 @@ const DOMAIN_ORDER = ["engineering", "marketing", "product", "finance", "leaders
 function formatAuraText(raw: string): string {
   return raw
     .replace(/\|\|\|DOCUMENT_REQUEST\|\|\|[\s\S]*$/, "")
+    .replace(/\|\|\|CRAFT_REQUEST\|\|\|[\s\S]*$/, "")
     .replace(/\|\|\|ACTION_ITEMS\|\|\|[\s\S]*$/, "")
     .replace(/\|\|\|DOCUMENT_REQUEST[\s\S]*$/, "")
     .replace(/\|\|\|ACTION_ITEMS[\s\S]*$/, "")
@@ -1926,6 +1927,7 @@ export default function ChatScreen() {
               fullContent += parsed.content;
               const displayContent = fullContent
                 .replace(/\|\|\|DOCUMENT_REQUEST\|\|\|[\s\S]*$/, "")
+    .replace(/\|\|\|CRAFT_REQUEST\|\|\|[\s\S]*$/, "")
                 .replace(/\|\|\|ACTION_ITEMS\|\|\|[\s\S]*$/, "")
                 .replace(/\|\|\|DOCUMENT_REQUEST[\s\S]*$/, "")
                 .replace(/\|\|\|ACTION_ITEMS[\s\S]*$/, "")
@@ -1939,6 +1941,7 @@ export default function ChatScreen() {
 
       const cleanedContent = fullContent
         .replace(/\|\|\|DOCUMENT_REQUEST\|\|\|[\s\S]*$/, "")
+    .replace(/\|\|\|CRAFT_REQUEST\|\|\|[\s\S]*$/, "")
         .replace(/\|\|\|ACTION_ITEMS\|\|\|[\s\S]*$/, "")
         .trim();
       const assistantMsg: Message = {

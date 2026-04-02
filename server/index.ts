@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
@@ -213,9 +214,9 @@ function setupErrorHandler(app: express.Application) {
 
   setupErrorHandler(app);
 
-  const port = parseInt(process.env.PORT || "5000", 10);
+  const port = parseInt(process.env.PORT || "3000", 10);
   server.listen(
-    { port, host: "0.0.0.0", reusePort: true },
+    { port, host: "127.0.0.1" },
     () => {
       log(`Aura server running on port ${port}`);
       log(`Auth: device-id based with validation`);

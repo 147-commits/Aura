@@ -10,7 +10,7 @@ export function getApiUrl(): string {
 
   if (!host) {
     // Local development fallback
-    return "http://localhost:5000";
+    return "http://localhost:3000";
   }
 
   let url = new URL(`https://${host}`);
