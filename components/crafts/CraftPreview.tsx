@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { getApiUrl } from "@/lib/query-client";
 import Colors from "@/constants/colors";
+import { LivePreview } from "./LivePreview";
 
 const C = Colors.dark;
 
@@ -129,7 +130,13 @@ export function CraftPreview({
 
           {/* Content */}
           <ScrollView style={styles.contentArea} showsVerticalScrollIndicator={false}>
-            {isInline && craft.content ? (
+            {(craft.kind === "html" || craft.kind === "react") && craft.content ? (
+              <LivePreview
+                content={craft.content}
+                kind={craft.kind as "html" | "react"}
+                isStreaming={false}
+              />
+            ) : isInline && craft.content ? (
               <View style={styles.codeBlock}>
                 <Text style={styles.codeText} selectable>
                   {craft.content}
