@@ -30,6 +30,8 @@ import { useRouter } from "expo-router";
 import { getApiUrl } from "@/lib/query-client";
 import Colors from "@/constants/colors";
 import { useIsWideWeb } from "@/components/WebContainer";
+import { CraftCard } from "@/components/crafts/CraftCard";
+import { CraftPreview } from "@/components/crafts/CraftPreview";
 
 const C = Colors.dark;
 
@@ -165,6 +167,7 @@ type Message = {
   actionItems?: ActionItem[];
   skillName?: string;
   skillAutoDetected?: boolean;
+  craft?: { id: string; title: string; kind: string; downloadUrl?: string; content?: string; filename: string };
 };
 
 type MemoryItem = {
@@ -1011,6 +1014,7 @@ function MessageBubble({
   onWrapUpSaveTasks,
   onWrapUpSaveToProject,
   onConfidenceTap,
+  onCraftPreview,
   allMessages,
   deviceId,
 }: {
@@ -1022,6 +1026,7 @@ function MessageBubble({
   onWrapUpSaveTasks: () => void;
   onWrapUpSaveToProject: () => void;
   onConfidenceTap: (confidence: Confidence, reason: string) => void;
+  onCraftPreview: (craft: Message["craft"]) => void;
   allMessages: Message[];
   deviceId: string;
 }) {
@@ -1174,6 +1179,13 @@ function MessageBubble({
             items={message.actionItems}
             deviceId={deviceId}
             onDismiss={() => {}}
+          />
+        )}
+        {!isUser && message.craft && (
+          <CraftCard
+            craft={message.craft}
+            onPreview={() => onCraftPreview(message.craft)}
+            deviceId={deviceId}
           />
         )}
       </View>
@@ -1374,6 +1386,7 @@ export default function ChatScreen() {
   const [showSkillPicker, setShowSkillPicker] = useState(false);
   const [skillsByDomain, setSkillsByDomain] = useState<Record<string, SkillSummaryUI[]> | null>(null);
   const [detectedSkill, setDetectedSkill] = useState<DetectedSkillInfo | null>(null);
+  const [previewCraft, setPreviewCraft] = useState<Message["craft"] | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
 
@@ -1882,6 +1895,7 @@ export default function ChatScreen() {
       let finalCitations: Citation[] = [];
       let finalDocRequest: DocumentRequest | null = null;
       let finalActionItems: ActionItem[] = [];
+      let finalCraft: Message["craft"] | undefined;
       let finalSkillName: string | undefined;
       let finalSkillAutoDetected: boolean | undefined;
 
@@ -1923,6 +1937,15 @@ export default function ChatScreen() {
               finalDocRequest = parsed.documentRequest || null;
             } else if (parsed.type === "action_items") {
               finalActionItems = parsed.actionItems || [];
+            } else if (parsed.type === "craft" && parsed.craft) {
+              finalCraft = {
+                id: parsed.craft.id,
+                title: parsed.craft.title,
+                kind: parsed.craft.kind,
+                downloadUrl: parsed.downloadUrl,
+                content: parsed.content,
+                filename: parsed.craft.filename,
+              };
             } else if (parsed.content) {
               fullContent += parsed.content;
               const displayContent = fullContent
@@ -1957,6 +1980,7 @@ export default function ChatScreen() {
         actionItems: finalActionItems.length > 0 ? finalActionItems : undefined,
         skillName: finalSkillName,
         skillAutoDetected: finalSkillAutoDetected,
+        craft: finalCraft,
         timestamp: Date.now(),
       };
 
@@ -2238,6 +2262,7 @@ export default function ChatScreen() {
               onWrapUpSaveTasks={handleWrapUpSaveTasks}
               onWrapUpSaveToProject={handleWrapUpSaveToProject}
               onConfidenceTap={(c, r) => setShowConfidencePopup({ confidence: c, reason: r })}
+              onCraftPreview={(craft) => setPreviewCraft(craft || null)}
               allMessages={messages}
               deviceId={deviceId}
             />
@@ -2442,6 +2467,12 @@ export default function ChatScreen() {
         activeSkillId={activeSkillId}
         onSelect={setActiveSkillId}
         onClose={() => setShowSkillPicker(false)}
+      />
+      <CraftPreview
+        visible={!!previewCraft}
+        craft={previewCraft || null}
+        deviceId={deviceId}
+        onClose={() => setPreviewCraft(null)}
       />
     </View>
   );

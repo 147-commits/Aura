@@ -295,3 +295,25 @@ export async function generateTodayPlan(): Promise<any> {
   if (!res.ok) throw new Error("Failed to generate plan");
   return res.json();
 }
+
+// ─── Crafts API ──────────────────────────────────────────────────────────────
+
+export async function getCrafts(): Promise<any[]> {
+  const h = await headers();
+  const res = await fetch(apiUrl("/api/crafts"), { headers: h });
+  if (!res.ok) throw new Error("Failed to fetch crafts");
+  return res.json();
+}
+
+export async function getCraftDetail(id: string): Promise<any> {
+  const h = await headers();
+  const res = await fetch(apiUrl(`/api/crafts/${id}`), { headers: h });
+  if (!res.ok) throw new Error("Craft not found");
+  return res.json();
+}
+
+export async function deleteCraftApi(id: string): Promise<void> {
+  const h = await headers();
+  const res = await fetch(apiUrl(`/api/crafts/${id}`), { method: "DELETE", headers: h });
+  if (!res.ok) throw new Error("Failed to delete craft");
+}
