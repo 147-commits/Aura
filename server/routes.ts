@@ -28,7 +28,7 @@ import {
   type RouteResult,
 } from "./skill-router";
 import { generatePDF, type DocumentRequest } from "./document-engine";
-import { generateCraft, listCrafts, getCraftFilePath, getMimeType } from "./craft-engine";
+import { generateCraft, listCrafts, getCraft, getCraftFilePath, getMimeType, deleteCraft } from "./craft-engine";
 import type { CraftKind, CraftRequest } from "../shared/schema";
 import { runResearch } from "./research-engine";
 import {
@@ -434,7 +434,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...(detectedSkill ? { detectedSkill } : {}),
       })}\n\n`);
       if (documentRequest) res.write(`data: ${JSON.stringify({ type: "document_request", documentRequest })}\n\n`);
-      if (craftRequest) res.write(`data: ${JSON.stringify({ type: "craft_request", craftRequest })}\n\n`);
+      if (craftRequest && userId) {
+        try {
+          const craftResult = await generateCraft(userId, { ...craftRequest, conversationId: conversationId || undefined });
+          res.write(`data: ${JSON.stringify({ type: "craft", craft: craftResult.craft, downloadUrl: craftResult.downloadUrl, content: craftResult.content })}\n\n`);
+        } catch (craftErr) {
+          console.error("Auto-craft generation failed:", craftErr);
+          res.write(`data: ${JSON.stringify({ type: "craft_request", craftRequest })}\n\n`);
+        }
+      } else if (craftRequest) {
+        res.write(`data: ${JSON.stringify({ type: "craft_request", craftRequest })}\n\n`);
+      }
       if (actionItems.length > 0) res.write(`data: ${JSON.stringify({ type: "action_items", actionItems })}\n\n`);
 
       if (!isPrivate && userId && conversationId) {
@@ -598,6 +608,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("Craft download error:", err);
       res.status(500).json({ error: "Failed to download craft" });
+    }
+  });
+
+  app.get("/api/crafts/:id", requireAuth, async (req, res) => {
+    try {
+      const craft = await getCraft(req.userId!, req.params.id as string);
+      if (!craft) return res.status(404).json({ error: "Craft not found" });
+      res.json(craft);
+    } catch (err) {
+      console.error("Get craft error:", err);
+      res.status(500).json({ error: "Failed to fetch craft" });
+    }
+  });
+
+  app.delete("/api/crafts/:id", requireAuth, async (req, res) => {
+    try {
+      const deleted = await deleteCraft(req.userId!, req.params.id as string);
+      if (!deleted) return res.status(404).json({ error: "Craft not found" });
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Delete craft error:", err);
+      res.status(500).json({ error: "Failed to delete craft" });
     }
   });
 

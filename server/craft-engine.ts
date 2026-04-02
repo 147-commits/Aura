@@ -175,6 +175,22 @@ export async function getCraftFilePath(
   return { filePath: r.file_path, filename: r.filename, kind: r.kind };
 }
 
+/** Delete a craft (verifies ownership, removes file if binary) */
+export async function deleteCraft(userId: string, craftId: string): Promise<boolean> {
+  const r = await queryOne<any>(
+    `SELECT file_path FROM crafts WHERE id = $1 AND user_id = $2`,
+    [craftId, userId]
+  );
+  if (!r) return false;
+
+  if (r.file_path) {
+    try { fs.unlinkSync(r.file_path); } catch {}
+  }
+
+  await query(`DELETE FROM crafts WHERE id = $1 AND user_id = $2`, [craftId, userId]);
+  return true;
+}
+
 /** Get MIME type for a craft kind */
 export function getMimeType(kind: CraftKind): string {
   return MIME_TYPES[kind] || "application/octet-stream";
