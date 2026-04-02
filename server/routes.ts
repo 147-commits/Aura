@@ -27,6 +27,8 @@ import {
   type RouteResult,
 } from "./skill-router";
 import { generatePDF, type DocumentRequest } from "./document-engine";
+import { generateCraft, listCrafts, getCraftFilePath, getMimeType } from "./craft-engine";
+import type { CraftKind, CraftRequest } from "../shared/schema";
 import { runResearch } from "./research-engine";
 import {
   processAttachment,
@@ -523,6 +525,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("Export error:", err);
       res.status(500).json({ error: "Failed to generate document" });
+    }
+  });
+
+  // ─── CRAFTS ───────────────────────────────────────────────────────────
+  app.post("/api/crafts/generate", requireAuth, budgetCheck, async (req, res) => {
+    try {
+      const request: CraftRequest = req.body;
+
+      if (!request.kind || !request.title) {
+        return res.status(400).json({ error: "kind and title are required" });
+      }
+
+      const validKinds: CraftKind[] = ["pdf", "docx", "pptx", "xlsx", "html", "react", "svg", "markdown", "code"];
+      if (!validKinds.includes(request.kind)) {
+        return res.status(400).json({ error: `Invalid kind. Valid: ${validKinds.join(", ")}` });
+      }
+
+      // Validate per-kind constraints
+      if (["pdf", "docx"].includes(request.kind)) {
+        if (!request.sections?.length) return res.status(400).json({ error: "sections required for document crafts" });
+        if (request.sections.length > 20) return res.status(400).json({ error: "Too many sections (max 20)" });
+        const totalLen = request.sections.reduce((s, sec) => s + (sec.content_markdown?.length || 0), 0);
+        if (totalLen > 50000) return res.status(400).json({ error: "Content too large (max 50k chars)" });
+      }
+      if (request.kind === "pptx" && request.slides && request.slides.length > 30) {
+        return res.status(400).json({ error: "Too many slides (max 30)" });
+      }
+      if (request.kind === "xlsx" && request.sheets && request.sheets.length > 10) {
+        return res.status(400).json({ error: "Too many sheets (max 10)" });
+      }
+      if (["html", "react", "svg", "markdown", "code"].includes(request.kind)) {
+        if (!request.content) return res.status(400).json({ error: "content required for inline crafts" });
+        if (request.content.length > 100000) return res.status(400).json({ error: "Content too large (max 100k chars)" });
+      }
+
+      const result = await generateCraft(req.userId!, request);
+      res.json(result);
+    } catch (err) {
+      console.error("Craft generation error:", err);
+      res.status(500).json({ error: "Aura couldn't craft that right now. Please try again." });
+    }
+  });
+
+  app.get("/api/crafts", requireAuth, async (req, res) => {
+    try {
+      const crafts = await listCrafts(req.userId!);
+      res.json(crafts);
+    } catch (err) {
+      console.error("List crafts error:", err);
+      res.status(500).json({ error: "Failed to fetch crafts" });
+    }
+  });
+
+  app.get("/api/crafts/:id/download", requireAuth, async (req, res) => {
+    try {
+      const result = await getCraftFilePath(req.userId!, req.params.id);
+      if (!result) return res.status(404).json({ error: "Craft not found" });
+
+      const { filePath, filename, kind } = result;
+      const fs = await import("fs");
+      if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Craft file not found" });
+
+      const buffer = fs.readFileSync(filePath);
+      res.setHeader("Content-Type", getMimeType(kind));
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.setHeader("Content-Length", buffer.length.toString());
+      res.send(buffer);
+    } catch (err) {
+      console.error("Craft download error:", err);
+      res.status(500).json({ error: "Failed to download craft" });
     }
   });
 

@@ -136,6 +136,23 @@ export async function initDatabase(): Promise<void> {
       )
     `);
 
+    // ─── Crafts ────────────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS crafts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
+        kind TEXT NOT NULL,
+        title_encrypted TEXT NOT NULL,
+        is_encrypted BOOLEAN DEFAULT TRUE,
+        content TEXT,
+        file_path TEXT,
+        filename TEXT NOT NULL,
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
     // ─── Indexes ───────────────────────────────────────────────────────
     await client.query(`CREATE INDEX IF NOT EXISTS idx_users_device_id ON users(device_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)`);
@@ -145,6 +162,8 @@ export async function initDatabase(): Promise<void> {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_rate_limits_user_window ON rate_limits(user_id, endpoint, window_start)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_crafts_user_id ON crafts(user_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_crafts_conversation_id ON crafts(conversation_id)`);
 
     await client.query("COMMIT");
     console.log("Database migration complete — all tables initialized");

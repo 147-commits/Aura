@@ -47,6 +47,61 @@ export interface DocumentRequest {
   sources?: { title: string; url: string }[];
 }
 
+// ─── Crafts ─────────────────────────────────────────────────────────────
+export type CraftKind =
+  | "pdf" | "docx" | "pptx" | "xlsx"
+  | "html" | "react" | "svg"
+  | "markdown" | "code";
+
+export interface CraftSlide {
+  master: "title" | "content" | "two-column" | "image-text" | "closing";
+  title?: string;
+  body?: string;
+  bullets?: string[];
+  imageUrl?: string;
+  leftContent?: string;
+  rightContent?: string;
+}
+
+export interface CraftSheet {
+  name: string;
+  columns: { header: string; key: string; width?: number }[];
+  rows: Record<string, string | number>[];
+  formulas?: { cell: string; formula: string }[];
+}
+
+export interface CraftRequest {
+  kind: CraftKind;
+  title: string;
+  filename?: string;
+  sections?: { heading: string; content_markdown: string }[];
+  slides?: CraftSlide[];
+  sheets?: CraftSheet[];
+  content?: string;
+  language?: string;
+  tables?: { title: string; columns: string[]; rows: string[][] }[];
+  sources?: { title: string; url: string }[];
+  conversationId?: string;
+}
+
+export interface Craft {
+  id: string;
+  userId: string;
+  conversationId?: string;
+  kind: CraftKind;
+  title: string;
+  content?: string;
+  filePath?: string;
+  filename: string;
+  createdAt: string;
+}
+
+export interface CraftResult {
+  craft: Craft;
+  content?: string;
+  downloadUrl?: string;
+}
+
 export interface ActionItem {
   type: "task" | "project" | "memory" | "decision";
   title: string;

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx ts-node --esm -e \":*)",
+      "Bash(wc -l \"c:\\\\Users\\\\MesonsCommunications\\\\Downloads\\\\Aura-v3-Redesigned\\\\app\\\\\\(tabs\\)\\\\aura.tsx\")"
+    ]
+  }
+}

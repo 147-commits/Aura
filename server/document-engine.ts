@@ -155,6 +155,312 @@ export async function generatePDF(request: DocumentRequest): Promise<Buffer> {
   });
 }
 
+// ─── DOCX Generator ─────────────────────────────────────────────────────────
+
+import {
+  Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+  HeadingLevel, AlignmentType, WidthType, ShadingType, LevelFormat, BorderStyle,
+  PageOrientation,
+} from "docx";
+import type { CraftRequest, CraftSlide, CraftSheet } from "../shared/schema";
+
+/** Parse **bold** markdown into TextRun objects */
+function parseMarkdownRuns(text: string, fontSize: number = 24): TextRun[] {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.filter(Boolean).map((part) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return new TextRun({ text: part.slice(2, -2), bold: true, font: "Arial", size: fontSize });
+    }
+    return new TextRun({ text: part, font: "Arial", size: fontSize });
+  });
+}
+
+export async function generateDOCX(request: DocumentRequest): Promise<Buffer> {
+  const numbering = {
+    config: [{
+      reference: "aura-bullets",
+      levels: [{
+        level: 0,
+        format: LevelFormat.BULLET,
+        text: "\u2022",
+        alignment: AlignmentType.LEFT,
+        style: { paragraph: { indent: { left: 720, hanging: 360 } } },
+      }],
+    }],
+  };
+
+  const children: Paragraph[] = [];
+
+  // Title
+  children.push(new Paragraph({
+    children: [new TextRun({ text: request.title, bold: true, font: "Arial", size: 44 })],
+    alignment: AlignmentType.CENTER,
+    spacing: { after: 200 },
+  }));
+
+  // Subtitle
+  children.push(new Paragraph({
+    children: [new TextRun({ text: `Crafted by Aura — ${new Date().toLocaleDateString()}`, font: "Arial", size: 18, color: "6B6966" })],
+    alignment: AlignmentType.CENTER,
+    spacing: { after: 400 },
+  }));
+
+  // Sections
+  for (const section of request.sections) {
+    children.push(new Paragraph({
+      children: [new TextRun({ text: section.heading, bold: true, font: "Arial", size: 28 })],
+      heading: HeadingLevel.HEADING_2,
+      spacing: { before: 300, after: 120 },
+    }));
+
+    const lines = section.content_markdown.split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      if (/^[-*→•]\s+/.test(trimmed)) {
+        const bulletText = trimmed.replace(/^[-*→•]\s+/, "");
+        children.push(new Paragraph({
+          children: parseMarkdownRuns(bulletText),
+          numbering: { reference: "aura-bullets", level: 0 },
+          spacing: { after: 60 },
+        }));
+      } else if (/^\d+\.\s+/.test(trimmed)) {
+        const numText = trimmed.replace(/^\d+\.\s+/, "");
+        children.push(new Paragraph({
+          children: parseMarkdownRuns(numText),
+          numbering: { reference: "aura-bullets", level: 0 },
+          spacing: { after: 60 },
+        }));
+      } else {
+        children.push(new Paragraph({
+          children: parseMarkdownRuns(trimmed),
+          spacing: { after: 80 },
+        }));
+      }
+    }
+  }
+
+  // Tables
+  if (request.tables) {
+    for (const table of request.tables) {
+      children.push(new Paragraph({
+        children: [new TextRun({ text: table.title, bold: true, font: "Arial", size: 24 })],
+        spacing: { before: 240, after: 120 },
+      }));
+
+      const colWidth = Math.floor(9000 / table.columns.length);
+      const headerRow = new TableRow({
+        children: table.columns.map((col) => new TableCell({
+          children: [new Paragraph({ children: [new TextRun({ text: col, bold: true, font: "Arial", size: 20, color: "FFFFFF" })] })],
+          width: { size: colWidth, type: WidthType.DXA },
+          shading: { type: ShadingType.CLEAR, fill: "6B8C54" },
+        })),
+      });
+
+      const dataRows = table.rows.map((row) => new TableRow({
+        children: row.map((cell) => new TableCell({
+          children: [new Paragraph({ children: [new TextRun({ text: cell, font: "Arial", size: 20 })] })],
+          width: { size: colWidth, type: WidthType.DXA },
+        })),
+      }));
+
+      children.push(new Paragraph({ children: [] })); // spacer
+      const docTable = new Table({
+        rows: [headerRow, ...dataRows],
+        width: { size: 9000, type: WidthType.DXA },
+      });
+      children.push(docTable as unknown as Paragraph);
+    }
+  }
+
+  // Sources
+  if (request.sources && request.sources.length > 0) {
+    children.push(new Paragraph({
+      children: [new TextRun({ text: "Sources", bold: true, font: "Arial", size: 24 })],
+      spacing: { before: 300, after: 120 },
+    }));
+    for (const src of request.sources) {
+      children.push(new Paragraph({
+        children: [new TextRun({ text: `${src.title}: ${src.url}`, font: "Arial", size: 20, color: "4F7FFF" })],
+        spacing: { after: 60 },
+      }));
+    }
+  }
+
+  const doc = new Document({
+    numbering,
+    creator: "Aura AI",
+    title: request.title,
+    sections: [{
+      properties: {
+        page: {
+          size: { width: 12240, height: 15840, orientation: PageOrientation.PORTRAIT },
+          margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 },
+        },
+      },
+      children,
+    }],
+  });
+
+  return Buffer.from(await Packer.toBuffer(doc));
+}
+
+// ─── PPTX Generator ─────────────────────────────────────────────────────────
+
+import pptxgen from "pptxgenjs";
+
+const PPTX_COLORS = {
+  sage: "6B8C54",
+  cream: "FAFAF5",
+  white: "FFFFFF",
+  dark: "1A1A1A",
+  secondary: "6B6966",
+  border: "E8E6E1",
+};
+
+export async function generatePPTX(request: CraftRequest): Promise<Buffer> {
+  const pres = new pptxgen();
+  pres.author = "Aura AI";
+  pres.title = request.title;
+  pres.layout = "LAYOUT_WIDE";
+
+  const slides = request.slides || [];
+
+  if (slides.length === 0) {
+    // Fallback: generate from sections
+    if (request.sections) {
+      // Title slide
+      const titleSlide = pres.addSlide();
+      titleSlide.background = { color: PPTX_COLORS.cream };
+      titleSlide.addText(request.title, { x: 0.5, y: 2.0, w: 12, h: 1.5, fontSize: 36, bold: true, color: PPTX_COLORS.sage, fontFace: "Arial", align: "center" });
+      titleSlide.addText(`Crafted by Aura — ${new Date().toLocaleDateString()}`, { x: 0.5, y: 3.5, w: 12, h: 0.5, fontSize: 14, color: PPTX_COLORS.secondary, fontFace: "Arial", align: "center" });
+
+      // Content slides from sections
+      for (const section of request.sections) {
+        const slide = pres.addSlide();
+        slide.background = { color: PPTX_COLORS.white };
+        slide.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: 13.33, h: 0.06, fill: { color: PPTX_COLORS.sage } });
+        slide.addText(section.heading, { x: 0.5, y: 0.3, w: 12, h: 0.8, fontSize: 24, bold: true, color: PPTX_COLORS.dark, fontFace: "Arial" });
+
+        const lines = section.content_markdown.split("\n").filter((l) => l.trim());
+        const bodyText = lines.map((l) => l.trim().replace(/^[-*→•]\s+/, "").replace(/\*\*/g, ""));
+        slide.addText(bodyText.map((t) => ({ text: t, options: { bullet: true, fontSize: 16, color: PPTX_COLORS.dark, fontFace: "Arial", breakLine: true } })), { x: 0.7, y: 1.3, w: 11, h: 5.5 });
+      }
+
+      // Closing slide
+      const closing = pres.addSlide();
+      closing.background = { color: PPTX_COLORS.sage };
+      closing.addText("Crafted by Aura", { x: 0.5, y: 2.5, w: 12, h: 1, fontSize: 28, color: PPTX_COLORS.white, fontFace: "Arial", align: "center", bold: true });
+      closing.addText(new Date().toLocaleDateString(), { x: 0.5, y: 3.5, w: 12, h: 0.5, fontSize: 14, color: PPTX_COLORS.cream, fontFace: "Arial", align: "center" });
+    }
+  } else {
+    for (const s of slides) {
+      const slide = pres.addSlide();
+      switch (s.master) {
+        case "title":
+          slide.background = { color: PPTX_COLORS.cream };
+          if (s.title) slide.addText(s.title, { x: 0.5, y: 2.0, w: 12, h: 1.5, fontSize: 36, bold: true, color: PPTX_COLORS.sage, fontFace: "Arial", align: "center" });
+          if (s.body) slide.addText(s.body, { x: 0.5, y: 3.5, w: 12, h: 0.5, fontSize: 14, color: PPTX_COLORS.secondary, fontFace: "Arial", align: "center" });
+          break;
+        case "content":
+          slide.background = { color: PPTX_COLORS.white };
+          slide.addShape(pres.ShapeType.rect, { x: 0, y: 0, w: 13.33, h: 0.06, fill: { color: PPTX_COLORS.sage } });
+          if (s.title) slide.addText(s.title, { x: 0.5, y: 0.3, w: 12, h: 0.8, fontSize: 24, bold: true, color: PPTX_COLORS.dark, fontFace: "Arial" });
+          if (s.bullets) {
+            slide.addText(s.bullets.map((b) => ({ text: b, options: { bullet: true, fontSize: 16, color: PPTX_COLORS.dark, fontFace: "Arial", breakLine: true } })), { x: 0.7, y: 1.3, w: 11, h: 5.5 });
+          } else if (s.body) {
+            slide.addText(s.body, { x: 0.7, y: 1.3, w: 11, h: 5.5, fontSize: 16, color: PPTX_COLORS.dark, fontFace: "Arial" });
+          }
+          break;
+        case "two-column":
+          slide.background = { color: PPTX_COLORS.white };
+          if (s.title) slide.addText(s.title, { x: 0.5, y: 0.3, w: 12, h: 0.8, fontSize: 24, bold: true, color: PPTX_COLORS.dark, fontFace: "Arial" });
+          if (s.leftContent) slide.addText(s.leftContent, { x: 0.5, y: 1.3, w: 5.5, h: 5.5, fontSize: 14, color: PPTX_COLORS.dark, fontFace: "Arial" });
+          if (s.rightContent) slide.addText(s.rightContent, { x: 7, y: 1.3, w: 5.5, h: 5.5, fontSize: 14, color: PPTX_COLORS.dark, fontFace: "Arial" });
+          break;
+        case "image-text":
+          slide.background = { color: PPTX_COLORS.white };
+          if (s.imageUrl) slide.addImage({ path: s.imageUrl, x: 0.3, y: 0.5, w: 6, h: 6 });
+          if (s.body) slide.addText(s.body, { x: 6.8, y: 0.5, w: 5.5, h: 6, fontSize: 14, color: PPTX_COLORS.dark, fontFace: "Arial" });
+          break;
+        case "closing":
+          slide.background = { color: PPTX_COLORS.sage };
+          slide.addText(s.title || "Crafted by Aura", { x: 0.5, y: 2.5, w: 12, h: 1, fontSize: 28, color: PPTX_COLORS.white, fontFace: "Arial", align: "center", bold: true });
+          if (s.body) slide.addText(s.body, { x: 0.5, y: 3.5, w: 12, h: 0.5, fontSize: 14, color: PPTX_COLORS.cream, fontFace: "Arial", align: "center" });
+          break;
+      }
+    }
+  }
+
+  const output = await pres.write({ outputType: "nodebuffer" });
+  return Buffer.from(output as ArrayBuffer);
+}
+
+// ─── XLSX Generator ─────────────────────────────────────────────────────────
+
+import ExcelJS from "exceljs";
+
+export async function generateXLSX(request: CraftRequest): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Aura AI";
+  workbook.created = new Date();
+
+  const sheets = request.sheets || [];
+  if (sheets.length === 0 && request.sections) {
+    // Fallback: create a single sheet from sections
+    const ws = workbook.addWorksheet(request.title.slice(0, 31));
+    ws.columns = [
+      { header: "Section", key: "section", width: 30 },
+      { header: "Content", key: "content", width: 80 },
+    ];
+    for (const s of request.sections) {
+      ws.addRow({ section: s.heading, content: s.content_markdown.replace(/\n/g, " ").slice(0, 500) });
+    }
+  }
+
+  for (const sheet of sheets) {
+    const ws = workbook.addWorksheet(sheet.name.slice(0, 31));
+    ws.columns = sheet.columns.map((c) => ({
+      header: c.header, key: c.key, width: c.width || 15,
+    }));
+
+    // Style header row
+    const headerRow = ws.getRow(1);
+    headerRow.eachCell((cell) => {
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF6B8C54" } };
+      cell.font = { bold: true, color: { argb: "FFFFFFFF" }, name: "Arial", size: 11 };
+      cell.border = {
+        top: { style: "thin" }, bottom: { style: "thin" },
+        left: { style: "thin" }, right: { style: "thin" },
+      };
+    });
+
+    // Data rows with alternating colors
+    for (let i = 0; i < sheet.rows.length; i++) {
+      const row = ws.addRow(sheet.rows[i]);
+      if (i % 2 === 1) {
+        row.eachCell((cell) => {
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF5F7F2" } };
+        });
+      }
+    }
+
+    // Apply formulas
+    if (sheet.formulas) {
+      for (const f of sheet.formulas) {
+        const cell = ws.getCell(f.cell);
+        cell.value = { formula: f.formula } as ExcelJS.CellFormulaValue;
+      }
+    }
+  }
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer);
+}
+
+// ─── PDF helper (existing) ──────────────────────────────────────────────────
+
 function renderRichLine(doc: PDFKit.PDFDocument, text: string, fontSize: number) {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
 
