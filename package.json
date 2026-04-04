@@ -12,7 +12,7 @@
     "server:prod": "cross-env NODE_ENV=production node server_dist/index.js",
     "db:push": "drizzle-kit push",
     "start": "npx expo start",
-    "test": "tsx tests/hallucination.test.ts && tsx tests/skill-routing.test.ts && tsx tests/skill-confidence.test.ts && tsx tests/skill-e2e.test.ts && tsx tests/craft-generation.test.ts && tsx tests/rag-pipeline.test.ts && tsx tests/verification-engine.test.ts && tsx tests/truth-engine-v2.test.ts && tsx tests/builder.test.ts",
+    "test": "tsx tests/hallucination.test.ts && tsx tests/skill-routing.test.ts && tsx tests/skill-confidence.test.ts && tsx tests/skill-e2e.test.ts && tsx tests/craft-generation.test.ts && tsx tests/rag-pipeline.test.ts && tsx tests/verification-engine.test.ts && tsx tests/truth-engine-v2.test.ts && tsx tests/builder.test.ts && tsx tests/phase-checklist.test.ts",
     "test:quality": "tsx scripts/quality-report.ts",
     "lint": "npx expo lint",
     "lint:fix": "npx expo lint --fix"
