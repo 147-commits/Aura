@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { hybridSearch } from "./retrieval-engine";
 
 export interface Citation {
   url: string;
@@ -21,11 +22,28 @@ export async function runResearch(
     ? `\n\nUser context: ${memory.map((m) => m.text).join("; ")}`
     : "";
 
+  // RAG: check local knowledge base first
+  let ragContext = "";
+  let ragCitations: Citation[] = [];
+  try {
+    const ragResults = await hybridSearch(query, 5);
+    if (ragResults.length > 0) {
+      ragContext = `\n\nRelevant knowledge base context:\n${ragResults.map((r) =>
+        `[Source: ${r.sourceTitle || r.sourceUrl || "Knowledge Base"} (${r.sourceType}, quality: ${r.qualityScore.toFixed(1)})]:\n${r.content}`
+      ).join("\n\n")}`;
+      ragCitations = ragResults
+        .filter((r) => r.sourceUrl)
+        .map((r) => ({ url: r.sourceUrl!, title: r.sourceTitle || "Knowledge Base", snippet: r.content.slice(0, 200) }));
+    }
+  } catch (ragErr) {
+    console.warn("[research] RAG search failed, continuing with web search:", ragErr);
+  }
+
   try {
     const response = await (openai as any).responses.create({
       model: "gpt-4o-mini",
       tools: [{ type: "web_search_preview" }],
-      input: `${query}${memoryContext}
+      input: `${query}${memoryContext}${ragContext}
 
 Respond with a structured research report. Include:
 ## Summary
@@ -62,17 +80,22 @@ End with: Confidence: High|Medium|Low`,
     const confidence = (confidenceMatch?.[1] as "High" | "Medium" | "Low") ?? "Medium";
     const cleanContent = outputText.replace(/Confidence:\s*(High|Medium|Low)\s*$/im, "").trim();
 
-    return { content: cleanContent, citations, confidence };
+    // Merge RAG + web citations (deduplicate by URL)
+    const seenUrls = new Set(citations.map((c) => c.url));
+    const mergedCitations = [...citations, ...ragCitations.filter((c) => !seenUrls.has(c.url))];
+
+    return { content: cleanContent, citations: mergedCitations, confidence };
   } catch (err) {
     console.error("Research engine error, falling back:", err);
-    return await fallbackResearch(query, openai, memoryContext);
+    return await fallbackResearch(query, openai, memoryContext, ragContext);
   }
 }
 
 async function fallbackResearch(
   query: string,
   openai: OpenAI,
-  memoryContext: string
+  memoryContext: string,
+  ragContext: string = ""
 ): Promise<ResearchResult> {
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
@@ -80,12 +103,12 @@ async function fallbackResearch(
       {
         role: "system",
         content: `You are a rigorous research assistant. Be honest about what you know vs what is uncertain.
-IMPORTANT: You do not have live web access in this fallback mode. State this clearly when relevant.
+IMPORTANT: You do not have live web access in this fallback mode. State this clearly when relevant.${ragContext ? "\nHowever, you have access to a local knowledge base with relevant context — use it when applicable." : ""}
 Always end with: Confidence: High|Medium|Low`,
       },
       {
         role: "user",
-        content: `Research query: ${query}${memoryContext}
+        content: `Research query: ${query}${memoryContext}${ragContext}
 
 Provide a structured research report. Note: I'm working from training data only, not live web search.
 

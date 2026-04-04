@@ -153,6 +153,30 @@ export async function initDatabase(): Promise<void> {
       )
     `);
 
+    // ─── Knowledge Chunks (RAG pipeline) ────────────────────────────────
+    try {
+      await client.query(`CREATE EXTENSION IF NOT EXISTS vector`);
+    } catch (e) {
+      console.warn("pgvector extension not available — RAG features will be disabled:", (e as Error).message);
+    }
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS knowledge_chunks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        content TEXT NOT NULL,
+        content_embedding vector(1536),
+        content_tsv tsvector,
+        source_url TEXT,
+        source_title TEXT,
+        source_type TEXT NOT NULL DEFAULT 'user_provided',
+        source_quality_score REAL DEFAULT 0.5,
+        chunk_index INTEGER NOT NULL DEFAULT 0,
+        parent_document_id TEXT,
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
     // ─── Indexes ───────────────────────────────────────────────────────
     await client.query(`CREATE INDEX IF NOT EXISTS idx_users_device_id ON users(device_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id)`);
@@ -164,6 +188,12 @@ export async function initDatabase(): Promise<void> {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_rate_limits_user_window ON rate_limits(user_id, endpoint, window_start)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_crafts_user_id ON crafts(user_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_crafts_conversation_id ON crafts(conversation_id)`);
+    try {
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_embedding ON knowledge_chunks USING hnsw (content_embedding vector_cosine_ops)`);
+    } catch { /* pgvector not available */ }
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_tsv ON knowledge_chunks USING GIN (content_tsv)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_parent ON knowledge_chunks(parent_document_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_source_type ON knowledge_chunks(source_type)`);
 
     await client.query("COMMIT");
     console.log("Database migration complete — all tables initialized");
