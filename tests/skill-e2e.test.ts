@@ -112,7 +112,7 @@ function createTestApp() {
 
   // GET /api/skills
   app.get("/api/skills", (_req, res) => {
-    const domains: SkillDomain[] = ["engineering", "marketing", "product", "finance", "leadership", "operations"];
+    const domains: SkillDomain[] = ["engineering", "marketing", "product", "finance", "leadership", "operations", "legal", "education", "health"];
     const grouped: Record<string, ReturnType<typeof buildSkillSummary>[]> = {};
     for (const domain of domains) {
       grouped[domain] = getSkillsByDomain(domain).map(buildSkillSummary);
@@ -202,16 +202,16 @@ async function runAllFlows() {
     assert("leadership" in body, "Has leadership domain");
     assert("operations" in body, "Has operations domain");
 
-    assert(body.engineering.length === 4, `Engineering: 4 skills (got ${body.engineering.length})`);
-    assert(body.marketing.length === 3, `Marketing: 3 skills (got ${body.marketing.length})`);
+    assert(body.engineering.length === 5, `Engineering: 5 skills (got ${body.engineering.length})`);
+    assert(body.marketing.length === 4, `Marketing: 4 skills (got ${body.marketing.length})`);
     assert(body.product.length === 3, `Product: 3 skills (got ${body.product.length})`);
-    assert(body.finance.length === 2, `Finance: 2 skills (got ${body.finance.length})`);
+    assert(body.finance.length === 3, `Finance: 3 skills (got ${body.finance.length})`);
     assert(body.leadership.length === 3, `Leadership: 3 skills (got ${body.leadership.length})`);
     assert(body.operations.length === 3, `Operations: 3 skills (got ${body.operations.length})`);
 
     // Total across all domains
     const total = Object.values(body).reduce((sum: number, arr: any) => sum + arr.length, 0);
-    assert(total === 18, `Total: 18 skills (got ${total})`);
+    assert(total === 26, `Total: 26 skills (got ${total})`);
   });
 
   await flow("SUPERTEST — GET /api/skills skill structure (no secrets)", async () => {
@@ -393,7 +393,7 @@ async function runAllFlows() {
 
     // Valid IDs listed
     const validIds = getAllSkillIds();
-    assert(validIds.length === 18, "18 valid IDs available");
+    assert(validIds.length === 26, "26 valid IDs available");
 
     // Malicious systemPrompt blocked
     const evil = {

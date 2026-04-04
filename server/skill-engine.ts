@@ -13,7 +13,10 @@ export type SkillDomain =
   | "product"
   | "finance"
   | "leadership"
-  | "operations";
+  | "operations"
+  | "legal"
+  | "education"
+  | "health";
 
 export interface ConfidenceRules {
   /** When to assign High confidence */
@@ -61,6 +64,14 @@ import { okrCoach } from "./skills/okr-coach";
 import { seniorPm } from "./skills/senior-pm";
 import { scrumMaster } from "./skills/scrum-master";
 import { technicalWriter } from "./skills/technical-writer";
+import { legalContractReviewer } from "./skills/legal-contract-reviewer";
+import { legalComplianceAdvisor } from "./skills/legal-compliance-advisor";
+import { curriculumDesigner } from "./skills/curriculum-designer";
+import { tutoringExpert } from "./skills/tutoring-expert";
+import { wellnessCoach } from "./skills/wellness-coach";
+import { dataEngineer } from "./skills/data-engineer";
+import { brandStrategist } from "./skills/brand-strategist";
+import { investorRelations } from "./skills/investor-relations";
 
 /** All registered skills, keyed by skill ID */
 export const SKILL_REGISTRY: Map<string, SkillDefinition> = new Map([
@@ -82,6 +93,14 @@ export const SKILL_REGISTRY: Map<string, SkillDefinition> = new Map([
   [seniorPm.id, seniorPm],
   [scrumMaster.id, scrumMaster],
   [technicalWriter.id, technicalWriter],
+  [legalContractReviewer.id, legalContractReviewer],
+  [legalComplianceAdvisor.id, legalComplianceAdvisor],
+  [curriculumDesigner.id, curriculumDesigner],
+  [tutoringExpert.id, tutoringExpert],
+  [wellnessCoach.id, wellnessCoach],
+  [dataEngineer.id, dataEngineer],
+  [brandStrategist.id, brandStrategist],
+  [investorRelations.id, investorRelations],
 ]);
 
 // ── Query Functions ─────────────────────────────────────────────────────────

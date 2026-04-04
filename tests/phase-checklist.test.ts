@@ -174,7 +174,7 @@ await phase("PHASE 4: Builder", () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 await phase("CROSS-PHASE: AURA_CORE integrity", () => {
-  // All 18 skills preserve core principles
+  // All 26 skills preserve core principles
   for (const [id, skill] of SKILL_REGISTRY) {
     const prompt = buildTruthSystemPrompt("chat", "normal", [], { activeSkill: skill });
     assert(prompt.includes("TRUTH FIRST"), `[ ] ${id}: TRUTH FIRST preserved`);
@@ -183,10 +183,10 @@ await phase("CROSS-PHASE: AURA_CORE integrity", () => {
   }
 
   // Skill counts
-  assert(SKILL_REGISTRY.size === 18, "[ ] 18 skills registered");
-  assert(getSkillsByDomain("engineering").length === 4, "[ ] 4 engineering skills");
-  assert(getSkillsByDomain("marketing").length === 3, "[ ] 3 marketing skills");
-  assert(getSkillsByDomain("finance").length === 2, "[ ] 2 finance skills");
+  assert(SKILL_REGISTRY.size === 26, "[ ] 26 skills registered");
+  assert(getSkillsByDomain("engineering").length === 5, "[ ] 5 engineering skills");
+  assert(getSkillsByDomain("marketing").length === 4, "[ ] 4 marketing skills");
+  assert(getSkillsByDomain("finance").length === 3, "[ ] 3 finance skills");
 });
 
 // ─── Summary ────────────────────────────────────────────────────────────────

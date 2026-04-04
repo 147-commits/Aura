@@ -254,6 +254,109 @@ export const DOMAIN_CONFIDENCE_RULES: Record<SkillDomain, ConfidenceRules> = {
       "this process will eliminate all blockers",
     ],
   },
+
+  legal: {
+    domain: "legal",
+    highAllowedWhen: [
+      "Identifying well-known risky clause patterns (unlimited liability, broad non-compete)",
+      "Explaining standard legal terms in plain language",
+      "Listing which regulations apply to a described business activity",
+      "Standard compliance framework descriptions (GDPR, SOX, HIPAA structure)",
+    ],
+    highForbiddenFor: [
+      "Jurisdiction-specific legal interpretations or rulings",
+      "Whether a specific contract is legally enforceable",
+      "Advice to sign or not sign any legal document",
+      "Predictions about legal outcomes or litigation results",
+    ],
+    mediumDefaultFor: [
+      "Contract risk assessment (depends on full context and jurisdiction)",
+      "Compliance gap analysis (depends on completeness of information)",
+      "Negotiation suggestions for contract terms",
+    ],
+    lowRequiredFor: [
+      "Any jurisdiction-specific legal advice",
+      "Enforceability predictions for specific clauses",
+      "Litigation outcome predictions",
+      "Tax implications of specific structures",
+    ],
+    alwaysStateAssumptions: true,
+    neverClaimFor: [
+      "this contract is safe to sign",
+      "you don't need a lawyer",
+      "this is legally compliant",
+      "you will win this case",
+    ],
+  },
+
+  education: {
+    domain: "education",
+    highAllowedWhen: [
+      "Established pedagogical frameworks (Bloom's Taxonomy, backward design, constructive alignment)",
+      "Standard curriculum structure and sequencing principles",
+      "Well-documented learning theories (Vygotsky ZPD, Piaget, constructivism)",
+      "Explaining well-established concepts in established fields",
+    ],
+    highForbiddenFor: [
+      "Predictions about learning outcomes for specific student populations",
+      "Claims about learning styles being definitively proven (debunked in research)",
+      "Guaranteed effectiveness of specific teaching methods without context",
+      "Student performance predictions",
+    ],
+    mediumDefaultFor: [
+      "Audience-specific recommendations (depends on learner demographics)",
+      "Time estimates for content delivery and mastery",
+      "Assessment design recommendations",
+    ],
+    lowRequiredFor: [
+      "How quickly a specific person will learn a topic",
+      "Whether a specific curriculum will succeed without piloting",
+      "Student engagement predictions for untested content",
+    ],
+    alwaysStateAssumptions: false,
+    neverClaimFor: [
+      "this curriculum will definitely work",
+      "students will learn faster with",
+      "guaranteed learning outcomes",
+      "this teaching method is always superior",
+    ],
+  },
+
+  health: {
+    domain: "health",
+    highAllowedWhen: [
+      "WHO physical activity guidelines (150 min/week moderate)",
+      "Established sleep hygiene principles (consistent schedule, dark room)",
+      "Habit formation frameworks (Atomic Habits, evidence-based behavioral science)",
+      "General wellness principles backed by meta-analyses and systematic reviews",
+    ],
+    highForbiddenFor: [
+      "ANY medical diagnosis, treatment, or prescription",
+      "Specific supplement or medication recommendations",
+      "Dietary plans for medical conditions (diabetes, allergies, eating disorders)",
+      "Claims about curing or treating any disease or condition",
+      "Mental health diagnoses or therapy recommendations",
+    ],
+    mediumDefaultFor: [
+      "General workout recommendations (depends on individual fitness, injuries)",
+      "Nutrition guidance for general health (not medical conditions)",
+      "Stress management techniques (effectiveness varies by individual)",
+    ],
+    lowRequiredFor: [
+      "Any claim about treating, curing, or preventing disease",
+      "Specific health outcome predictions for individuals",
+      "Supplement effectiveness claims",
+      "Diet plan effectiveness for weight loss or medical conditions",
+    ],
+    alwaysStateAssumptions: false,
+    neverClaimFor: [
+      "this will cure",
+      "guaranteed weight loss",
+      "you don't need to see a doctor",
+      "this supplement will",
+      "stop taking your medication",
+    ],
+  },
 };
 
 // ── Calibration Instruction Builder ─────────────────────────────────────────

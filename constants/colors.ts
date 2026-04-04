@@ -88,6 +88,9 @@ const dark = {
   domainFinance: "#6EE7B7",
   domainLeadership: "#E8A84C",
   domainOperations: palette.warmGray400,
+  domainLegal: "#FF6B6B",            // Coral red
+  domainEducation: "#4ECDC4",        // Teal
+  domainHealth: "#95E1D3",           // Mint green
 
   // ─── Gradients ─────────────────────────────────────────────────────────
   gradientThinking: [palette.sage500, palette.sage300] as readonly [string, string],
@@ -147,6 +150,9 @@ export const DOMAIN_COLORS: Record<string, string> = {
   finance: dark.domainFinance,
   leadership: dark.domainLeadership,
   operations: dark.domainOperations,
+  legal: dark.domainLegal,
+  education: dark.domainEducation,
+  health: dark.domainHealth,
 };
 
 export default {

@@ -335,7 +335,7 @@ describe("scoreDomains() — multi-domain and ambiguous queries", () => {
     assert(total === 0, "Entertainment request: all domains score 0");
   }
 
-  // Stress test: all 6 domains mentioned
+  // Stress test: all 9 domains mentioned
   {
     const scores = scoreDomains(
       "We need to deploy our api, fix our gtm positioning, write a prd, " +
@@ -649,11 +649,11 @@ describe("Token budget — prompt size constraints", () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe("Skill registry — completeness and integrity", () => {
-  assert(SKILL_REGISTRY.size === 18, `Registry has exactly 18 skills (got ${SKILL_REGISTRY.size})`);
+  assert(SKILL_REGISTRY.size === 26, `Registry has exactly 26 skills (got ${SKILL_REGISTRY.size})`);
 
   // Domain counts
   const expectedCounts: Record<string, number> = {
-    engineering: 4, marketing: 3, product: 3, finance: 2, leadership: 3, operations: 3,
+    engineering: 5, marketing: 4, product: 3, finance: 3, leadership: 3, operations: 3, legal: 2, education: 2, health: 1,
   };
   for (const [domain, expected] of Object.entries(expectedCounts)) {
     const actual = getSkillsByDomain(domain as any).length;
@@ -712,10 +712,10 @@ describe("Skill registry — completeness and integrity", () => {
     assert(getSkill("") === undefined, "Empty string skill returns undefined");
   }
 
-  // Exactly 6 domains
+  // Exactly 9 domains
   {
     const domains = new Set(Array.from(SKILL_REGISTRY.values()).map((s) => s.domain));
-    assert(domains.size === 6, `Exactly 6 domains (got ${domains.size})`);
+    assert(domains.size === 9, `Exactly 9 domains (got ${domains.size})`);
   }
 
   // Every skill ID matches a naming convention (kebab-case)

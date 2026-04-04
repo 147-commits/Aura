@@ -24,6 +24,9 @@ const DOMAINS: SkillDomain[] = [
   "finance",
   "leadership",
   "operations",
+  "legal",
+  "education",
+  "health",
 ];
 
 /** Keyword scoring matrix — 2+ matches in a category triggers detection */
@@ -55,6 +58,21 @@ const DOMAIN_KEYWORDS: Record<SkillDomain, string[]> = {
   operations: [
     "process", "workflow", "scrum", "kanban", "sprint",
     "velocity", "retrospective", "documentation", "runbook",
+  ],
+  legal: [
+    "contract", "compliance", "GDPR", "CCPA", "HIPAA",
+    "terms of service", "liability", "NDA", "regulation",
+    "legal review", "indemnification", "intellectual property",
+  ],
+  education: [
+    "curriculum", "lesson plan", "learning objectives", "syllabus",
+    "teach me", "explain like", "course design", "pedagogy",
+    "training program", "study", "tutor",
+  ],
+  health: [
+    "exercise", "nutrition", "sleep", "stress management",
+    "workout", "diet", "fitness", "meditation", "wellness",
+    "healthy habits", "mental health",
   ],
 };
 

@@ -168,7 +168,10 @@ export type SkillDomain =
   | "product"
   | "finance"
   | "leadership"
-  | "operations";
+  | "operations"
+  | "legal"
+  | "education"
+  | "health";
 
 export interface SkillSummary {
   id: string;
