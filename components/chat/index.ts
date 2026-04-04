@@ -6,4 +6,8 @@ export { ActionItemCards } from "./ActionItemCards";
 export { CitationsList, DocumentDownloadButton } from "./Citations";
 export { QuickChips, ModeBadge, QUICK_CHIPS } from "./QuickChips";
 export { CraftCard, CraftPreview } from "../crafts";
+export { InlineCitation } from "./InlineCitation";
+export { SourceQualityBar } from "./SourceQualityBar";
+export { DisagreementCard } from "./DisagreementCard";
+export { VerifyButton } from "./VerifyButton";
 export * from "./types";
