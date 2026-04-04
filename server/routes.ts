@@ -32,6 +32,8 @@ import { generateCraft, listCrafts, getCraft, getCraftFilePath, getMimeType, del
 import { getTemplates } from "./craft-templates";
 import type { CraftKind, CraftRequest } from "../shared/schema";
 import { runResearch } from "./research-engine";
+import { hybridSearch, type RetrievalResult } from "./retrieval-engine";
+import { chainOfVerification, selfConsistencyCheck, computeCompositeConfidence, applyDomainCalibration } from "./verification-engine";
 import {
   processAttachment,
   buildAttachmentContext,
@@ -427,10 +429,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { cleanContent: preCraftContent, craftRequest } = parseCraftRequest(preConfContent);
       const { cleanContent, documentRequest } = parseDocumentRequest(preCraftContent);
 
+      // ─── Verification pipeline (research + decision modes) ────────
+      let verificationSources: RetrievalResult[] = [];
+      let compositeScore: number | undefined;
+      let compositeLevel: string | undefined;
+
+      if (mode === "decision") {
+        try {
+          verificationSources = await hybridSearch(lastUserMessage, 5);
+          if (verificationSources.length > 0) {
+            res.write(`data: ${JSON.stringify({
+              type: "sources",
+              sources: verificationSources.map((s) => ({
+                title: s.sourceTitle, url: s.sourceUrl, quality: s.qualityScore, sourceType: s.sourceType,
+              })),
+            })}\n\n`);
+          }
+
+          const verification = await chainOfVerification(lastUserMessage, cleanContent, verificationSources, openai);
+
+          if (verification.verifiedClaims.length > 0) {
+            res.write(`data: ${JSON.stringify({
+              type: "claims",
+              claims: verification.verifiedClaims.map((c) => ({
+                claim: c.claim, confidence: c.confidence, sources: c.sources,
+              })),
+            })}\n\n`);
+          }
+
+          // Apply domain calibration as final authority
+          const finalLevel = activeSkill
+            ? applyDomainCalibration(verification.overallConfidence, confidence as "High" | "Medium" | "Low")
+            : verification.overallConfidence;
+
+          compositeScore = verification.compositeScore;
+          compositeLevel = finalLevel;
+
+          res.write(`data: ${JSON.stringify({
+            type: "composite_confidence",
+            score: verification.compositeScore,
+            level: finalLevel,
+            breakdown: {
+              claims: verification.verifiedClaims.length,
+              disclaimers: verification.disclaimers,
+            },
+          })}\n\n`);
+
+          if (verification.disclaimers.length > 0) {
+            perfLog({ event: "verification-disclaimers", disclaimers: verification.disclaimers });
+          }
+        } catch (verifyErr) {
+          console.warn("[verification] Pipeline failed, using LLM confidence:", verifyErr);
+        }
+      }
+
       res.write(`data: ${JSON.stringify({
         type: "confidence",
-        confidence,
+        confidence: compositeLevel || confidence,
         confidenceReason,
+        ...(compositeScore !== undefined ? { compositeScore } : {}),
         ...(activeSkillId ? { activeSkillId } : {}),
         ...(detectedSkill ? { detectedSkill } : {}),
       })}\n\n`);
