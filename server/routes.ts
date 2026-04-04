@@ -683,7 +683,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/crafts/:id/download", requireAuth, async (req, res) => {
     try {
-      const result = await getCraftFilePath(req.userId!, req.params.id);
+      const result = await getCraftFilePath(req.userId!, req.params.id as string);
       if (!result) return res.status(404).json({ error: "Craft not found" });
 
       const { filePath, filename, kind } = result;
@@ -881,7 +881,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/memories/:id", requireAuth, async (req, res) => {
     try {
-      await deleteMemory(req.userId!, req.params.id);
+      await deleteMemory(req.userId!, req.params.id as string);
       res.json({ success: true });
     } catch (err) {
       console.error("Delete memory error:", err);
@@ -1017,7 +1017,7 @@ Keep each field under 15 words. Be specific and personal. Never invent facts you
 
   app.patch("/api/tasks/:id", requireAuth, async (req, res) => {
     try {
-      const task = await updateTask(req.userId!, req.params.id, req.body);
+      const task = await updateTask(req.userId!, req.params.id as string, req.body);
       if (!task) return res.status(404).json({ error: "Task not found" });
       res.json(task);
     } catch (err) {
@@ -1028,7 +1028,7 @@ Keep each field under 15 words. Be specific and personal. Never invent facts you
 
   app.delete("/api/tasks/:id", requireAuth, async (req, res) => {
     try {
-      await deleteTask(req.userId!, req.params.id);
+      await deleteTask(req.userId!, req.params.id as string);
       res.json({ success: true });
     } catch (err) {
       console.error("Delete task error:", err);
@@ -1062,7 +1062,7 @@ Keep each field under 15 words. Be specific and personal. Never invent facts you
 
   app.patch("/api/projects/:id", requireAuth, async (req, res) => {
     try {
-      const project = await updateProject(req.userId!, req.params.id, req.body);
+      const project = await updateProject(req.userId!, req.params.id as string, req.body);
       if (!project) return res.status(404).json({ error: "Project not found" });
       res.json(project);
     } catch (err) {
@@ -1073,7 +1073,7 @@ Keep each field under 15 words. Be specific and personal. Never invent facts you
 
   app.delete("/api/projects/:id", requireAuth, async (req, res) => {
     try {
-      await deleteProject(req.userId!, req.params.id);
+      await deleteProject(req.userId!, req.params.id as string);
       res.json({ success: true });
     } catch (err) {
       console.error("Delete project error:", err);
@@ -1129,7 +1129,7 @@ Keep each field under 15 words. Be specific and personal. Never invent facts you
   });
 
   app.get("/api/skills/:id", requireAuth, (req, res) => {
-    const skill = getSkill(req.params.id);
+    const skill = getSkill(req.params.id as string);
     if (!skill) return res.status(404).json({ error: "Skill not found" });
     res.setHeader("Cache-Control", "public, max-age=3600");
     res.json(buildSkillSummary(skill));
