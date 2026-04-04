@@ -32,6 +32,7 @@ import { generateCraft, listCrafts, getCraft, getCraftFilePath, getMimeType, del
 import { getTemplates } from "./craft-templates";
 import type { CraftKind, CraftRequest } from "../shared/schema";
 import { runResearch } from "./research-engine";
+import { shouldCheckConsolidation, runConsolidation, getConsolidationStatus } from "./memory-consolidator";
 import { hybridSearch, type RetrievalResult } from "./retrieval-engine";
 import { chainOfVerification, selfConsistencyCheck, computeCompositeConfidence, applyDomainCalibration } from "./verification-engine";
 import {
@@ -107,6 +108,9 @@ const SKILL_ICONS: Record<SkillDomain, string> = {
   finance: "bar-chart",
   leadership: "compass",
   operations: "settings",
+  legal: "shield-checkmark",
+  education: "school",
+  health: "heart",
 };
 
 const SKILL_DESCRIPTIONS: Record<string, string> = {
@@ -128,6 +132,14 @@ const SKILL_DESCRIPTIONS: Record<string, string> = {
   "senior-pm": "Project delivery, critical path analysis, and stakeholder management",
   "scrum-master": "Scrum ceremonies, team health, and continuous improvement",
   "technical-writer": "Documentation strategy, Diataxis framework, and content structure",
+  "legal-contract-reviewer": "Contract risk analysis, clause explanation, and amendment suggestions",
+  "legal-compliance-advisor": "GDPR, CCPA, HIPAA compliance checklists and gap analysis",
+  "curriculum-designer": "Course design with backward design, Bloom's taxonomy, and assessment alignment",
+  "tutoring-expert": "Socratic teaching, scaffolded learning, and concept explanation",
+  "wellness-coach": "Evidence-based wellness, habit formation, and fitness principles",
+  "data-engineer": "Data pipelines, ETL/ELT, warehousing, and data modeling",
+  "brand-strategist": "Brand identity, voice and tone, positioning, and brand architecture",
+  "investor-relations": "Pitch decks, cap tables, term sheets, and investor updates",
 };
 
 function buildSkillSummary(skill: SkillDefinition) {
@@ -510,6 +522,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await saveMessage(conversationId, "assistant", cleanContent, { mode, confidence, explainLevel });
         if (rememberFlag) extractAndSaveMemories(userId, lastUserMessage, openai).catch(console.error);
         await conversationHeartbeat(conversationId);
+        // Memory consolidation check (every 10th request, async)
+        if (shouldCheckConsolidation(userId)) {
+          runConsolidation(userId).catch((err) => console.warn("[consolidator] Async consolidation failed:", err));
+        }
       }
 
       if (userId) trackCompletion(userId, lastUserMessage, fullContent, modelConfig.tier);
@@ -1160,6 +1176,16 @@ Keep each field under 15 words. Be specific and personal. Never invent facts you
       res.json(summary);
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch feedback summary" });
+    }
+  });
+
+  // ─── MEMORY CONSOLIDATION ──────────────────────────────────────────────
+  app.get("/api/memory/consolidation-status", requireAuth, async (req, res) => {
+    try {
+      const status = await getConsolidationStatus(req.userId!);
+      res.json(status);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to get consolidation status" });
     }
   });
 

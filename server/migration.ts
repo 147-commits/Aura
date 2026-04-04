@@ -15,9 +15,15 @@ export async function initDatabase(): Promise<void> {
       CREATE TABLE IF NOT EXISTS users (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         device_id TEXT UNIQUE NOT NULL,
+        last_memory_consolidation TIMESTAMPTZ,
+        memory_count INTEGER DEFAULT 0,
         created_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+
+    // Add columns for existing installations
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_memory_consolidation TIMESTAMPTZ`).catch(() => {});
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS memory_count INTEGER DEFAULT 0`).catch(() => {});
 
     // ─── Conversations ─────────────────────────────────────────────────
     await client.query(`
