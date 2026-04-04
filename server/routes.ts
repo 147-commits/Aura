@@ -1179,6 +1179,33 @@ Keep each field under 15 words. Be specific and personal. Never invent facts you
     }
   });
 
+  // ─── DATA EXPORT (GDPR Article 20) ─────────────────────────────────────
+  app.get("/api/export/all", requireAuth, async (req, res) => {
+    try {
+      const { exportUserData, tasksToCSV, projectsToCSV } = await import("./export-engine");
+      const data = await exportUserData(req.userId!);
+
+      // Build a JSON package with all data
+      const exportPackage = {
+        metadata: data.metadata,
+        conversations: data.conversations,
+        memories: data.memories,
+        tasks: data.tasks,
+        projects: data.projects,
+        crafts: data.crafts.map((c) => ({ ...c, filePath: undefined })), // Don't expose server paths
+        tasks_csv: tasksToCSV(data.tasks),
+        projects_csv: projectsToCSV(data.projects),
+      };
+
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Content-Disposition", `attachment; filename="aura-export-${new Date().toISOString().split("T")[0]}.json"`);
+      res.json(exportPackage);
+    } catch (err) {
+      console.error("Export error:", err);
+      res.status(500).json({ error: "Failed to export data" });
+    }
+  });
+
   // ─── MCP CONNECTIONS ───────────────────────────────────────────────────
   (() => {
     const mcpImports = {
