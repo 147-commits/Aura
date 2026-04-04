@@ -230,6 +230,20 @@ export async function initDatabase(): Promise<void> {
       )
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_feedback_user_id ON feedback(user_id)`);
+    // ─── MCP Connections ───────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS mcp_connections (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        server_name TEXT NOT NULL,
+        server_url TEXT NOT NULL,
+        transport TEXT DEFAULT 'sse',
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_mcp_connections_user_id ON mcp_connections(user_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_builder_projects_user_id ON builder_projects(user_id)`);
 
     await client.query("COMMIT");
