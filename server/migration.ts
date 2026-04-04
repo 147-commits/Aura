@@ -195,6 +195,19 @@ export async function initDatabase(): Promise<void> {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_parent ON knowledge_chunks(parent_document_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_source_type ON knowledge_chunks(source_type)`);
 
+    // ─── User Feedback ──────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS feedback (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        message_id UUID,
+        conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
+        rating TEXT NOT NULL CHECK (rating IN ('up', 'down')),
+        comment TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+
     // ─── Builder Projects ─────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS builder_projects (
@@ -210,6 +223,7 @@ export async function initDatabase(): Promise<void> {
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_feedback_user_id ON feedback(user_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_builder_projects_user_id ON builder_projects(user_id)`);
 
     await client.query("COMMIT");

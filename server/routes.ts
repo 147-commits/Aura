@@ -1129,6 +1129,40 @@ Keep each field under 15 words. Be specific and personal. Never invent facts you
     }
   });
 
+  // ─── FEEDBACK ──────────────────────────────────────────────────────────
+  app.post("/api/feedback", requireAuth, async (req, res) => {
+    try {
+      const { messageId, conversationId, rating, comment } = req.body;
+      if (!rating || !["up", "down"].includes(rating)) {
+        return res.status(400).json({ error: "rating must be 'up' or 'down'" });
+      }
+      const { query: dbQuery } = await import("./db");
+      await dbQuery(
+        `INSERT INTO feedback (user_id, message_id, conversation_id, rating, comment) VALUES ($1, $2, $3, $4, $5)`,
+        [req.userId, messageId || null, conversationId || null, rating, comment || null]
+      );
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Feedback error:", err);
+      res.status(500).json({ error: "Failed to save feedback" });
+    }
+  });
+
+  app.get("/api/feedback/summary", requireAuth, async (req, res) => {
+    try {
+      const { query: dbQuery } = await import("./db");
+      const rows = await dbQuery<{ rating: string; count: string }>(
+        `SELECT rating, COUNT(*)::text as count FROM feedback WHERE user_id = $1 GROUP BY rating`,
+        [req.userId]
+      );
+      const summary: Record<string, number> = { up: 0, down: 0 };
+      for (const r of rows) summary[r.rating] = parseInt(r.count);
+      res.json(summary);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch feedback summary" });
+    }
+  });
+
   // ─── EXTRACT ACTION ITEMS ─────────────────────────────────────────────
   app.post("/api/extract-actions", async (req, res) => {
     try {
