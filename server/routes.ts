@@ -728,6 +728,119 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(getTemplates());
   });
 
+  // ─── BUILDER ──────────────────────────────────────────────────────────
+  (() => {
+    const builderImports = {
+      engine: require("./builder-engine") as typeof import("./builder-engine"),
+      prompts: require("./builder-prompts") as typeof import("./builder-prompts"),
+    };
+
+    app.post("/api/builder/generate", requireAuth, budgetCheck, async (req, res) => {
+      try {
+        const { projectId, prompt, type = "website", name } = req.body;
+        if (!prompt) return res.status(400).json({ error: "prompt is required" });
+
+        res.setHeader("Content-Type", "text/event-stream");
+        res.setHeader("Cache-Control", "no-cache, no-transform");
+        res.flushHeaders();
+
+        // Create or fetch project
+        let project;
+        if (projectId) {
+          project = await builderImports.engine.getBuilderProject(projectId, req.userId!);
+          if (!project) {
+            res.write(`data: ${JSON.stringify({ type: "error", error: "Project not found" })}\n\n`);
+            res.write("data: [DONE]\n\n");
+            res.end();
+            return;
+          }
+        } else {
+          project = await builderImports.engine.createBuilderProject(
+            req.userId!, type, name || "Untitled Website"
+          );
+        }
+
+        // Build messages
+        const systemPrompt = type === "mobile-app"
+          ? builderImports.prompts.MOBILE_APP_BUILDER_PROMPT
+          : builderImports.prompts.WEBSITE_BUILDER_PROMPT;
+
+        const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
+          { role: "system", content: systemPrompt },
+        ];
+
+        // Include existing HTML as context for iterations
+        if (project.currentHtml) {
+          messages.push({
+            role: "assistant",
+            content: project.currentHtml,
+          });
+        }
+
+        messages.push({ role: "user", content: prompt });
+
+        // Stream generation
+        const { createStream: streamAI } = await import("./ai-provider");
+        const stream = streamAI("gpt-4o-mini", messages, 8192);
+
+        let fullHtml = "";
+        for await (const chunk of stream) {
+          if (chunk.content) {
+            fullHtml += chunk.content;
+            res.write(`data: ${JSON.stringify({ type: "chunk", content: chunk.content })}\n\n`);
+          }
+        }
+
+        // Save to project
+        const files = { ...project.files, "index.html": fullHtml };
+        await builderImports.engine.updateProjectFiles(project.id, files, fullHtml);
+
+        res.write(`data: ${JSON.stringify({
+          type: "complete",
+          project: { id: project.id, name: project.name, type: project.type },
+        })}\n\n`);
+        res.write("data: [DONE]\n\n");
+        res.end();
+      } catch (err) {
+        console.error("Builder generate error:", err);
+        if (!res.headersSent) res.status(500).json({ error: "Aura couldn't build that right now" });
+        else { res.write("data: [DONE]\n\n"); res.end(); }
+      }
+    });
+
+    app.get("/api/builder/projects", requireAuth, async (req, res) => {
+      try {
+        const projects = await builderImports.engine.getUserBuilderProjects(req.userId!);
+        res.json(projects);
+      } catch (err) {
+        console.error("List builder projects error:", err);
+        res.status(500).json({ error: "Failed to fetch projects" });
+      }
+    });
+
+    app.get("/api/builder/projects/:id", requireAuth, async (req, res) => {
+      try {
+        const project = await builderImports.engine.getBuilderProject(req.params.id as string, req.userId!);
+        if (!project) return res.status(404).json({ error: "Project not found" });
+        res.json(project);
+      } catch (err) {
+        console.error("Get builder project error:", err);
+        res.status(500).json({ error: "Failed to fetch project" });
+      }
+    });
+
+    app.delete("/api/builder/projects/:id", requireAuth, async (req, res) => {
+      try {
+        const deleted = await builderImports.engine.deleteBuilderProject(req.params.id as string, req.userId!);
+        if (!deleted) return res.status(404).json({ error: "Project not found" });
+        res.json({ success: true });
+      } catch (err) {
+        console.error("Delete builder project error:", err);
+        res.status(500).json({ error: "Failed to delete project" });
+      }
+    });
+  })();
+
   // ─── MESSAGES ─────────────────────────────────────────────────────────
   app.get("/api/messages", async (req, res) => {
     try {

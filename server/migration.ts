@@ -195,6 +195,23 @@ export async function initDatabase(): Promise<void> {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_parent ON knowledge_chunks(parent_document_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_source_type ON knowledge_chunks(source_type)`);
 
+    // ─── Builder Projects ─────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS builder_projects (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        type VARCHAR(20) NOT NULL DEFAULT 'website',
+        name TEXT NOT NULL,
+        files JSONB DEFAULT '{}',
+        current_html TEXT,
+        deploy_url TEXT,
+        conversation_id UUID REFERENCES conversations(id),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_builder_projects_user_id ON builder_projects(user_id)`);
+
     await client.query("COMMIT");
     console.log("Database migration complete — all tables initialized");
   } catch (err) {

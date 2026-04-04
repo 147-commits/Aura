@@ -187,6 +187,29 @@ export interface ChatRequest {
   activeSkillId?: string;
 }
 
+// ─── Builder ────────────────────────────────────────────────────────────
+export type BuilderProjectType = "website" | "mobile-app";
+
+export interface BuilderProject {
+  id: string;
+  userId: string;
+  type: BuilderProjectType;
+  name: string;
+  files: Record<string, string>;
+  currentHtml?: string;
+  deployUrl?: string;
+  conversationId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BuilderGenerateRequest {
+  projectId?: string;
+  prompt: string;
+  type?: BuilderProjectType;
+  name?: string;
+}
+
 // ─── API Response Types ──────────────────────────────────────────────────
 export interface ApiError {
   error: string;
