@@ -36,7 +36,7 @@ console.log("═".repeat(60));
 
 console.log(`\nTotal eval cases: ${ALL_EVAL_CASES.length}`);
 
-assert(ALL_EVAL_CASES.length >= 40, `At least 40 eval cases (got ${ALL_EVAL_CASES.length})`);
+assert(ALL_EVAL_CASES.length >= 100, `At least 100 eval cases (got ${ALL_EVAL_CASES.length})`);
 
 // Check all required fields
 for (const c of ALL_EVAL_CASES) {
