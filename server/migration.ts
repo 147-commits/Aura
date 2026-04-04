@@ -25,6 +25,11 @@ export async function initDatabase(): Promise<void> {
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_memory_consolidation TIMESTAMPTZ`).catch(() => {});
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS memory_count INTEGER DEFAULT 0`).catch(() => {});
 
+    // Conversation branching support
+    await client.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS parent_message_id UUID`).catch(() => {});
+    await client.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS parent_conversation_id UUID`).catch(() => {});
+    await client.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS branch_point_message_id UUID`).catch(() => {});
+
     // ─── Conversations ─────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS conversations (

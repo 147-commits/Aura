@@ -33,6 +33,7 @@ import { getTemplates } from "./craft-templates";
 import type { CraftKind, CraftRequest } from "../shared/schema";
 import { runResearch } from "./research-engine";
 import { shouldCheckConsolidation, runConsolidation, getConsolidationStatus } from "./memory-consolidator";
+import { generateSuggestions } from "./suggestions-engine";
 import { hybridSearch, type RetrievalResult } from "./retrieval-engine";
 import { chainOfVerification, selfConsistencyCheck, computeCompositeConfidence, applyDomainCalibration } from "./verification-engine";
 import {
@@ -556,6 +557,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         estimatedOutputTokens: outputTokens,
         estimatedCostUSD: +estimatedCostUSD.toFixed(6),
       });
+
+      // Smart suggestions (async, don't block DONE)
+      try {
+        const suggestions = await generateSuggestions(lastUserMessage, cleanContent, mode);
+        if (suggestions.length > 0) {
+          res.write(`data: ${JSON.stringify({ type: "suggestions", suggestions })}\n\n`);
+        }
+      } catch {}
 
       res.write("data: [DONE]\n\n");
       res.end();
@@ -1176,6 +1185,46 @@ Keep each field under 15 words. Be specific and personal. Never invent facts you
       res.json(summary);
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch feedback summary" });
+    }
+  });
+
+  // ─── CONVERSATION BRANCHING ────────────────────────────────────────────
+  app.post("/api/conversations/branch", requireAuth, async (req, res) => {
+    try {
+      const { conversationId, messageId } = req.body;
+      if (!conversationId || !messageId) {
+        return res.status(400).json({ error: "conversationId and messageId required" });
+      }
+
+      const { query: dbQuery, queryOne: dbQueryOne } = await import("./db");
+
+      // Verify ownership
+      const conv = await dbQueryOne<any>(
+        "SELECT id, title FROM conversations WHERE id = $1 AND user_id = $2",
+        [conversationId, req.userId]
+      );
+      if (!conv) return res.status(404).json({ error: "Conversation not found" });
+
+      // Create branch conversation
+      const branch = await dbQueryOne<any>(
+        `INSERT INTO conversations (user_id, title, parent_conversation_id, branch_point_message_id)
+         VALUES ($1, $2, $3, $4) RETURNING id, title, created_at`,
+        [req.userId, `Branch of: ${conv.title}`, conversationId, messageId]
+      );
+
+      // Copy messages up to the branch point into the new conversation
+      await dbQuery(
+        `INSERT INTO messages (conversation_id, role, content_plaintext, content_encrypted, is_encrypted, type, mode, confidence, created_at)
+         SELECT $1, role, content_plaintext, content_encrypted, is_encrypted, type, mode, confidence, created_at
+         FROM messages WHERE conversation_id = $2 AND created_at <= (SELECT created_at FROM messages WHERE id = $3)
+         ORDER BY created_at`,
+        [branch.id, conversationId, messageId]
+      );
+
+      res.json({ branchId: branch.id, title: branch.title });
+    } catch (err) {
+      console.error("Branch error:", err);
+      res.status(500).json({ error: "Failed to create branch" });
     }
   });
 
