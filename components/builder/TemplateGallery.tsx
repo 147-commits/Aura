@@ -54,6 +54,28 @@ export const BUILDER_TEMPLATES: BuilderTemplate[] = [
     icon: "time-outline",
     prompt: "Build a coming soon page. Large centered heading, brief description, email capture input with submit button, social media links, and a subtle animated background. Minimal and elegant.",
   },
+  // Mobile app templates
+  {
+    id: "todo-app",
+    name: "Todo App",
+    description: "List, add, complete, delete tasks",
+    icon: "checkbox-outline",
+    prompt: "Build a Todo app with React Native. Features: add tasks with a text input, mark tasks complete with a checkbox, delete tasks with swipe or button, task counter showing completed/total. Clean minimal design with a header.",
+  },
+  {
+    id: "calculator",
+    name: "Calculator",
+    description: "Grid layout, basic operations",
+    icon: "calculator-outline",
+    prompt: "Build a Calculator app with React Native. Grid layout of number buttons (0-9), operations (+, -, ×, ÷), equals, clear, and decimal point. Display showing current input and result. Dark theme with rounded buttons.",
+  },
+  {
+    id: "profile-card",
+    name: "Profile Card",
+    description: "Avatar, bio, social links, gradient",
+    icon: "person-circle-outline",
+    prompt: "Build a Profile Card app with React Native. Features: large avatar image at top, name and title, bio paragraph, social media link buttons (GitHub, Twitter, LinkedIn), stats row (followers, projects, stars). Gradient header background.",
+  },
 ];
 
 export function TemplateGallery({
