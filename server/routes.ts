@@ -29,6 +29,7 @@ import {
 } from "./skill-router";
 import { generatePDF, type DocumentRequest } from "./document-engine";
 import { generateCraft, listCrafts, getCraft, getCraftFilePath, getMimeType, deleteCraft } from "./craft-engine";
+import { getTemplates } from "./craft-templates";
 import type { CraftKind, CraftRequest } from "../shared/schema";
 import { runResearch } from "./research-engine";
 import {
@@ -631,6 +632,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Delete craft error:", err);
       res.status(500).json({ error: "Failed to delete craft" });
     }
+  });
+
+  app.get("/api/craft-templates", (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.json(getTemplates());
   });
 
   // ─── MESSAGES ─────────────────────────────────────────────────────────

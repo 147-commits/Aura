@@ -40,6 +40,7 @@ type TabItem = {
 const TAB_ITEMS: TabItem[] = [
   { name: "aura", title: "Aura", icon: "chatbubble-outline", iconActive: "chatbubble" },
   { name: "tasks", title: "Tasks", icon: "checkbox-outline", iconActive: "checkbox" },
+  { name: "crafts", title: "Crafts", icon: "hammer-outline", iconActive: "hammer" },
   { name: "today", title: "", icon: "add", iconActive: "add" }, // Center FAB placeholder
   { name: "memory", title: "Memory", icon: "layers-outline", iconActive: "layers" },
   { name: "projects", title: "More", icon: "ellipsis-horizontal", iconActive: "ellipsis-horizontal" },
