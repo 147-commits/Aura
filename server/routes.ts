@@ -839,6 +839,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(500).json({ error: "Failed to delete project" });
       }
     });
+
+    app.post("/api/builder/projects/:id/deploy", requireAuth, async (req, res) => {
+      try {
+        const { vercelToken } = req.body;
+        if (!vercelToken) return res.status(400).json({ error: "vercelToken is required" });
+
+        const project = await builderImports.engine.getBuilderProject(req.params.id as string, req.userId!);
+        if (!project) return res.status(404).json({ error: "Project not found" });
+        if (!project.files || Object.keys(project.files).length === 0) {
+          return res.status(400).json({ error: "No files to deploy" });
+        }
+
+        const { deployToVercel, saveDeployUrl } = await import("./deploy-engine");
+        const result = await deployToVercel(project.name, project.files, vercelToken);
+        await saveDeployUrl(project.id, result.url);
+
+        res.json({ success: true, url: result.url, deploymentId: result.deploymentId });
+      } catch (err) {
+        console.error("Deploy error:", err);
+        res.status(500).json({ error: "Deployment failed — check your Vercel token" });
+      }
+    });
   })();
 
   // ─── MESSAGES ─────────────────────────────────────────────────────────

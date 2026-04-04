@@ -8,7 +8,7 @@
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import {
-  View, Text, StyleSheet, Pressable, ScrollView, Platform, TextInput,
+  View, Text, StyleSheet, Pressable, ScrollView, Platform, TextInput, Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -53,6 +53,9 @@ export function BuilderView({
   const [chatHistory, setChatHistory] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
   const [showTemplates, setShowTemplates] = useState(!initialProjectId && !initialPrompt);
   const [deviceId, setDeviceId] = useState("anonymous");
+  const [deployUrl, setDeployUrl] = useState<string | null>(null);
+  const [isDeploying, setIsDeploying] = useState(false);
+  const [version, setVersion] = useState(1);
 
   useEffect(() => {
     AsyncStorage.getItem(DEVICE_ID_KEY).then((id) => { if (id) setDeviceId(id); });
@@ -110,6 +113,7 @@ export function BuilderView({
         }
       }
 
+      setVersion((v) => v + 1);
       setChatHistory((prev) => [...prev, { role: "assistant", content: "Website updated" }]);
     } catch (err) {
       console.error("Builder error:", err);
@@ -154,6 +158,44 @@ export function BuilderView({
           <Text style={styles.urlBar}>preview://{projectName.toLowerCase().replace(/\s+/g, "-")}</Text>
         </View>
         <View style={styles.headerActions}>
+          {version > 1 && (
+            <View style={styles.versionBadge}>
+              <Text style={styles.versionText}>v{version}</Text>
+            </View>
+          )}
+          {htmlContent && (
+            <Pressable
+              onPress={async () => {
+                if (isDeploying || !projectId) return;
+                setIsDeploying(true);
+                try {
+                  const baseUrl = getApiUrl();
+                  // For MVP: prompt user for token via alert. In production: use expo-secure-store.
+                  const token = Platform.OS === "web" ? prompt("Enter your Vercel token:") : null;
+                  if (!token) { setIsDeploying(false); return; }
+                  const resp = await fetch(new URL(`/api/builder/projects/${projectId}/deploy`, baseUrl).toString(), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "x-device-id": deviceId },
+                    body: JSON.stringify({ vercelToken: token }),
+                  });
+                  if (resp.ok) {
+                    const data = await resp.json();
+                    setDeployUrl(data.url);
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  }
+                } catch (err) {
+                  console.error("Deploy error:", err);
+                } finally {
+                  setIsDeploying(false);
+                }
+              }}
+              style={[styles.deployBtn, isDeploying && { opacity: 0.5 }]}
+              disabled={isDeploying}
+            >
+              <Ionicons name={isDeploying ? "hourglass-outline" : "cloud-upload-outline"} size={14} color="#fff" />
+              <Text style={styles.deployBtnText}>{isDeploying ? "Deploying..." : "Deploy"}</Text>
+            </Pressable>
+          )}
           <Pressable onPress={() => setFullscreen(true)} style={styles.actionBtn}>
             <Ionicons name="expand-outline" size={16} color={C.textSecondary} />
           </Pressable>
@@ -187,6 +229,18 @@ export function BuilderView({
           </View>
         )}
       </View>
+
+      {/* Deploy URL banner */}
+      {deployUrl && (
+        <Pressable
+          style={styles.deployBanner}
+          onPress={() => { if (Platform.OS === "web") window.open(deployUrl, "_blank"); else Linking.openURL(deployUrl); }}
+        >
+          <Ionicons name="globe" size={14} color={C.confidenceHigh} />
+          <Text style={styles.deployBannerText} numberOfLines={1}>{deployUrl}</Text>
+          <Ionicons name="open-outline" size={14} color={C.accent} />
+        </Pressable>
+      )}
 
       {/* Preview area (top 60%) */}
       <View style={[styles.preview, { alignItems: "center" }]}>
@@ -336,5 +390,38 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
     color: C.text,
     lineHeight: 18,
+  },
+  versionBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: C.accentGlow,
+  },
+  versionText: { fontSize: 10, fontFamily: "Inter_600SemiBold", color: C.accent },
+  deployBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: C.accent,
+  },
+  deployBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold", color: "#fff" },
+  deployBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: C.accentGlow,
+    borderBottomWidth: 1,
+    borderBottomColor: C.border,
+  },
+  deployBannerText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    color: C.accent,
   },
 });
