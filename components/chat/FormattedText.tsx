@@ -1,6 +1,7 @@
 import React from "react";
 import { Text, View, ScrollView, StyleSheet, Platform, Pressable } from "react-native";
 import { C } from "./types";
+import { openLink, parseLinksInText } from "@/lib/link-utils";
 
 /**
  * FormattedText — renders AI markdown responses with professional typography.
@@ -198,13 +199,48 @@ function renderInline(text: string): React.ReactNode[] {
     if (seg === "→") {
       return <Text key={i} style={{ fontWeight: "700", color: C.accent }}>→</Text>;
     }
-    // Link: [text](url)
+    // Markdown link: [text](url)
     const linkMatch = seg.match(/\[([^\]]+)\]\(([^)]+)\)/);
     if (linkMatch) {
-      return <Text key={i} style={{ color: C.accent, textDecorationLine: "underline" }}>{linkMatch[1]}</Text>;
+      return (
+        <Text
+          key={i}
+          style={mdStyles.link}
+          onPress={() => openLink(linkMatch[2])}
+        >
+          {linkMatch[1]}
+        </Text>
+      );
     }
-    return seg;
+    // Plain text: detect bare URLs and make them tappable
+    return renderTextWithLinks(seg, i);
   });
+}
+
+/** Render plain text with bare URLs detected and made tappable */
+function renderTextWithLinks(text: string, key: number): React.ReactNode {
+  const segments = parseLinksInText(text);
+  if (segments.length === 1 && segments[0].type === "text") {
+    return segments[0].content;
+  }
+  return (
+    <Text key={key}>
+      {segments.map((seg, j) => {
+        if (seg.type === "link" && seg.url) {
+          return (
+            <Text
+              key={`${key}-${j}`}
+              style={mdStyles.link}
+              onPress={() => openLink(seg.url!)}
+            >
+              {seg.content}
+            </Text>
+          );
+        }
+        return seg.content;
+      })}
+    </Text>
+  );
 }
 
 // ── Styles ──────────────────────────────────────────────────────────────────
@@ -242,6 +278,10 @@ const mdStyles = StyleSheet.create({
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
     color: "#E0E0E0",
     lineHeight: 20,
+  },
+  link: {
+    color: C.accent,
+    textDecorationLine: "underline" as const,
   },
   inlineCode: {
     backgroundColor: C.surfaceSecondary,
