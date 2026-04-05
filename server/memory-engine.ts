@@ -201,6 +201,65 @@ export async function getConversationHistory(
     }));
 }
 
+// ─── Conversation Management ────────────────────────────────────────────────
+
+export async function createConversation(userId: string, title?: string): Promise<string> {
+  const result = await queryOne<{ id: string }>(
+    "INSERT INTO conversations (user_id, title) VALUES ($1, $2) RETURNING id",
+    [userId, title || "New chat"]
+  );
+  return result!.id;
+}
+
+export async function listConversations(userId: string, limit: number = 50): Promise<Array<{
+  id: string;
+  title: string;
+  updatedAt: string;
+  lastMessage?: string;
+}>> {
+  const rows = await query<any>(
+    `SELECT c.id, c.title, c.updated_at,
+     (SELECT content_encrypted FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_msg_enc,
+     (SELECT is_encrypted FROM messages WHERE conversation_id = c.id ORDER BY created_at DESC LIMIT 1) as last_msg_encrypted
+     FROM conversations c
+     WHERE c.user_id = $1
+     ORDER BY c.updated_at DESC
+     LIMIT $2`,
+    [userId, limit]
+  );
+  return rows.map((r: any) => ({
+    id: r.id,
+    title: r.title,
+    updatedAt: r.updated_at,
+    lastMessage: r.last_msg_enc ? safeDecrypt(r.last_msg_enc, r.last_msg_encrypted)?.slice(0, 100) : undefined,
+  }));
+}
+
+export async function deleteConversation(userId: string, conversationId: string): Promise<boolean> {
+  const result = await query(
+    "DELETE FROM conversations WHERE id = $1 AND user_id = $2 RETURNING id",
+    [conversationId, userId]
+  );
+  return result.length > 0;
+}
+
+export async function updateConversationTitle(conversationId: string, title: string): Promise<void> {
+  await query("UPDATE conversations SET title = $1 WHERE id = $2", [title, conversationId]);
+}
+
+export async function generateConversationTitle(firstMessage: string, openai: any): Promise<string> {
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: `Generate a 3-6 word title for a conversation that starts with: "${firstMessage.slice(0, 200)}". Return ONLY the title, nothing else. No quotes.` }],
+      max_completion_tokens: 20,
+    });
+    return response.choices[0]?.message?.content?.trim() || "New chat";
+  } catch {
+    return firstMessage.slice(0, 40) + (firstMessage.length > 40 ? "..." : "");
+  }
+}
+
 export async function saveCitations(
   messageId: string,
   citations: { url: string; title: string; snippet: string }[]

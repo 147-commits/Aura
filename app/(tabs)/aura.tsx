@@ -1388,6 +1388,7 @@ export default function ChatScreen() {
   const [skillsByDomain, setSkillsByDomain] = useState<Record<string, SkillSummaryUI[]> | null>(null);
   const [detectedSkill, setDetectedSkill] = useState<DetectedSkillInfo | null>(null);
   const [previewCraft, setPreviewCraft] = useState<Message["craft"] | null>(null);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [thinkingStep, setThinkingStep] = useState<ThinkingStep | null>(null);
   const [thinkingSources, setThinkingSources] = useState<string[]>([]);
   const [savedMemory, setSavedMemory] = useState<{ text: string; category: string } | null>(null);
@@ -1858,6 +1859,7 @@ export default function ChatScreen() {
         formData.append("rememberFlag", String(!isPrivate));
         formData.append("autoDetectMode", "false");
         if (activeSkillId) formData.append("activeSkillId", activeSkillId);
+        if (currentConversationId) formData.append("conversationId", currentConversationId);
 
         for (const att of currentAttachments) {
           const fileObj = {
@@ -1885,6 +1887,7 @@ export default function ChatScreen() {
             rememberFlag: !isPrivate,
             autoDetectMode: false,
             ...(activeSkillId ? { activeSkillId } : {}),
+            ...(currentConversationId ? { conversationId: currentConversationId } : {}),
           }),
         });
       }
@@ -1919,7 +1922,9 @@ export default function ChatScreen() {
           if (data === "[DONE]") break;
           try {
             const parsed = JSON.parse(data);
-            if (parsed.type === "memory_saved" && parsed.memories?.length > 0) {
+            if (parsed.type === "conversation_title" && parsed.conversationId) {
+              setCurrentConversationId(parsed.conversationId);
+            } else if (parsed.type === "memory_saved" && parsed.memories?.length > 0) {
               setSavedMemory({ text: parsed.memories[0].text, category: parsed.memories[0].category });
             } else if (parsed.type === "status") {
               setThinkingStep(parsed.step as ThinkingStep);
@@ -2238,6 +2243,19 @@ export default function ChatScreen() {
             <Ionicons name="chevron-down" size={10} color={C.textTertiary} />
           </Pressable>
           </RNAnimated.View>
+
+          {/* New Chat Button */}
+          <Pressable
+            onPress={() => {
+              setMessages([]);
+              setCurrentConversationId(null);
+              setStreamingText("");
+            }}
+            style={styles.memoryBtn}
+            hitSlop={8}
+          >
+            <Ionicons name="create-outline" size={20} color={C.textSecondary} />
+          </Pressable>
 
           {/* Memory Button */}
           <Pressable

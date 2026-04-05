@@ -44,6 +44,11 @@ import {
 import {
   getOrCreateUser,
   getOrCreateConversation,
+  createConversation,
+  listConversations,
+  deleteConversation as deleteConv,
+  updateConversationTitle,
+  generateConversationTitle,
   getMemories,
   addMemory,
   deleteMemory,
@@ -202,6 +207,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         rememberFlag = true,
         autoDetectMode = false,
         activeSkillId,
+        conversationId: requestedConversationId,
       } = body;
 
       const userId = req.userId;
@@ -233,7 +239,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let dbMemory: { text: string; category: string }[] = clientMemory;
 
       if (userId) {
-        conversationId = await getOrCreateConversation(userId);
+        if (requestedConversationId) {
+          const { queryOne: qo } = await import("./db");
+          const conv = await qo<{ id: string }>("SELECT id FROM conversations WHERE id = $1 AND user_id = $2", [requestedConversationId, userId]);
+          conversationId = conv?.id || await getOrCreateConversation(userId);
+        } else {
+          conversationId = await getOrCreateConversation(userId);
+        }
         const memories = await getMemories(userId);
         dbMemory = memories.map((m: any) => ({ text: m.text, category: m.category }));
       }
@@ -577,6 +589,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         estimatedOutputTokens: outputTokens,
         estimatedCostUSD: +estimatedCostUSD.toFixed(6),
       });
+
+      // Auto-title new conversations
+      if (conversationId && lastUserMessage) {
+        try {
+          const { queryOne: qo } = await import("./db");
+          const conv = await qo<{ title: string }>("SELECT title FROM conversations WHERE id = $1", [conversationId]);
+          if (conv && (conv.title === "New chat" || conv.title === "Aura Chat")) {
+            const title = await generateConversationTitle(lastUserMessage, openai);
+            await updateConversationTitle(conversationId, title);
+            res.write(`data: ${JSON.stringify({ type: "conversation_title", conversationId, title })}\n\n`);
+          }
+        } catch (err) { console.warn("Title generation failed:", err); }
+      }
 
       // Smart suggestions (async, don't block DONE)
       try {
@@ -923,12 +948,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/messages", async (req, res) => {
     try {
       if (!req.userId) return res.json([]);
-      const conversationId = await getOrCreateConversation(req.userId);
-      const history = await getConversationHistory(conversationId, 50);
+      const filterConvId = req.query.conversationId as string | undefined;
+      let convId: string;
+      if (filterConvId) {
+        // Verify ownership
+        const { queryOne: qo } = await import("./db");
+        const conv = await qo<{ id: string }>("SELECT id FROM conversations WHERE id = $1 AND user_id = $2", [filterConvId, req.userId]);
+        convId = conv?.id || await getOrCreateConversation(req.userId);
+      } else {
+        convId = await getOrCreateConversation(req.userId);
+      }
+      const history = await getConversationHistory(convId, 50);
       res.json(history);
     } catch (err) {
       console.error("Get messages error:", err);
       res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+
+  // ─── CONVERSATIONS ────────────────────────────────────────────────────
+  app.get("/api/conversations", requireAuth, async (req, res) => {
+    try {
+      const conversations = await listConversations(req.userId!);
+      res.json(conversations);
+    } catch (err) {
+      console.error("List conversations error:", err);
+      res.status(500).json({ error: "Failed to list conversations" });
+    }
+  });
+
+  app.post("/api/conversations", requireAuth, async (req, res) => {
+    try {
+      const { title } = req.body || {};
+      const id = await createConversation(req.userId!, title);
+      res.json({ id, title: title || "New chat" });
+    } catch (err) {
+      console.error("Create conversation error:", err);
+      res.status(500).json({ error: "Failed to create conversation" });
+    }
+  });
+
+  app.delete("/api/conversations/:id", requireAuth, async (req, res) => {
+    try {
+      const deleted = await deleteConv(req.userId!, req.params.id as string);
+      if (!deleted) return res.status(404).json({ error: "Conversation not found" });
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Delete conversation error:", err);
+      res.status(500).json({ error: "Failed to delete conversation" });
     }
   });
 
