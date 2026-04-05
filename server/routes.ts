@@ -28,7 +28,7 @@ import {
   type RouteResult,
 } from "./skill-router";
 import { generatePDF, type DocumentRequest } from "./document-engine";
-import { generateCraft, listCrafts, getCraft, getCraftFilePath, getMimeType, deleteCraft } from "./craft-engine";
+import { generateCraft, listCrafts, getCraft, getCraftFilePath, getMimeType, deleteCraft, generateCraftPreview } from "./craft-engine";
 import { getTemplates } from "./craft-templates";
 import type { CraftKind, CraftRequest } from "../shared/schema";
 import { runResearch } from "./research-engine";
@@ -743,6 +743,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("Craft download error:", err);
       res.status(500).json({ error: "Failed to download craft" });
+    }
+  });
+
+  app.get("/api/crafts/:id/preview", requireAuth, async (req, res) => {
+    try {
+      const preview = await generateCraftPreview(req.userId!, req.params.id as string);
+      if (!preview) return res.status(404).json({ error: "Preview not available" });
+      res.json(preview);
+    } catch (err) {
+      console.error("Craft preview error:", err);
+      res.status(500).json({ error: "Failed to generate preview" });
     }
   });
 
