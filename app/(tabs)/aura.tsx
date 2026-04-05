@@ -35,6 +35,7 @@ import { CraftPreview } from "@/components/crafts/CraftPreview";
 import { MessageActions } from "@/components/chat/MessageActions";
 import { ThinkingIndicator, type ThinkingStep } from "@/components/chat/ThinkingIndicator";
 import { MemoryNotification } from "@/components/chat/MemoryNotification";
+import { ScrollToBottomButton } from "@/components/chat/ScrollToBottomButton";
 
 const C = Colors.dark;
 
@@ -1389,6 +1390,8 @@ export default function ChatScreen() {
   const [thinkingStep, setThinkingStep] = useState<ThinkingStep | null>(null);
   const [thinkingSources, setThinkingSources] = useState<string[]>([]);
   const [savedMemory, setSavedMemory] = useState<{ text: string; category: string } | null>(null);
+  const [isNearBottom, setIsNearBottom] = useState(true);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
 
@@ -2289,6 +2292,14 @@ export default function ChatScreen() {
           showsVerticalScrollIndicator={false}
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
+          onScroll={(e) => {
+            // Inverted FlatList: offset 0 = bottom, positive = scrolled up
+            const offset = e.nativeEvent.contentOffset.y;
+            const nearBottom = offset < 100;
+            setIsNearBottom(nearBottom);
+            setShowScrollBtn(!nearBottom && displayMessages.length > 3);
+          }}
+          scrollEventThrottle={100}
           ListHeaderComponent={
             savedMemory ? (
               <MemoryNotification
@@ -2312,6 +2323,14 @@ export default function ChatScreen() {
             ) : null
           }
         />
+
+        {showScrollBtn && (
+          <ScrollToBottomButton onPress={() => {
+            flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+            setIsNearBottom(true);
+            setShowScrollBtn(false);
+          }} />
+        )}
 
         {/* Input Area */}
         <View style={[styles.inputContainer, { paddingBottom: Math.max(bottomPadding, 8) + 6 }]}>

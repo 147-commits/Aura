@@ -13,4 +13,5 @@ export { VerifyButton } from "./VerifyButton";
 export { MessageActions } from "./MessageActions";
 export { ThinkingIndicator } from "./ThinkingIndicator";
 export { MemoryNotification } from "./MemoryNotification";
+export { ScrollToBottomButton } from "./ScrollToBottomButton";
 export * from "./types";
