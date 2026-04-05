@@ -11,4 +11,5 @@ export { SourceQualityBar } from "./SourceQualityBar";
 export { DisagreementCard } from "./DisagreementCard";
 export { VerifyButton } from "./VerifyButton";
 export { MessageActions } from "./MessageActions";
+export { ThinkingIndicator } from "./ThinkingIndicator";
 export * from "./types";

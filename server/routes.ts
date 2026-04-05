@@ -349,6 +349,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.write(`data: ${JSON.stringify({ type: "skill_active", ...detectedSkill })}\n\n`);
       }
 
+      // Status: thinking
+      res.write(`data: ${JSON.stringify({ type: "status", step: "thinking", message: "Understanding your question..." })}\n\n`);
+
       const isTriage = detectStressSignals(lastUserMessage);
       const promptStart = Date.now();
       const systemPrompt = chainedPromptOverride
@@ -370,11 +373,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // ─── Research mode ─────────────────────────────────────────────
       if (mode === "research") {
+        res.write(`data: ${JSON.stringify({ type: "status", step: "searching", message: "Searching the web..." })}\n\n`);
         const result = await runResearch(lastUserMessage, openai, dbMemory);
 
         if (result.citations.length > 0) {
+          const sourceDomains = result.citations.map((c) => { try { return new URL(c.url).hostname; } catch { return c.url; } });
+          res.write(`data: ${JSON.stringify({ type: "status", step: "reading", message: `Reading ${result.citations.length} sources...`, sources: sourceDomains })}\n\n`);
           res.write(`data: ${JSON.stringify({ type: "citations", citations: result.citations })}\n\n`);
         }
+        res.write(`data: ${JSON.stringify({ type: "status", step: "composing", message: "Putting it all together..." })}\n\n`);
         res.write(`data: ${JSON.stringify({ type: "confidence", confidence: result.confidence })}\n\n`);
 
         const words = result.content.split(" ");
@@ -420,6 +427,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           chatMessages.push({ role: msg.role, content: msg.content });
         }
       }
+
+      // Status: composing
+      res.write(`data: ${JSON.stringify({ type: "status", step: "composing", message: "Putting it all together..." })}\n\n`);
 
       // Stream via unified provider — Claude for skills, OpenAI for everything else
       const stream = createStream(modelConfig.modelId, chatMessages, modelConfig.maxTokens);

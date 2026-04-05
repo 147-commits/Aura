@@ -33,6 +33,7 @@ import { useIsWideWeb } from "@/components/WebContainer";
 import { CraftCard } from "@/components/crafts/CraftCard";
 import { CraftPreview } from "@/components/crafts/CraftPreview";
 import { MessageActions } from "@/components/chat/MessageActions";
+import { ThinkingIndicator, type ThinkingStep } from "@/components/chat/ThinkingIndicator";
 
 const C = Colors.dark;
 
@@ -1374,6 +1375,8 @@ export default function ChatScreen() {
   const [skillsByDomain, setSkillsByDomain] = useState<Record<string, SkillSummaryUI[]> | null>(null);
   const [detectedSkill, setDetectedSkill] = useState<DetectedSkillInfo | null>(null);
   const [previewCraft, setPreviewCraft] = useState<Message["craft"] | null>(null);
+  const [thinkingStep, setThinkingStep] = useState<ThinkingStep | null>(null);
+  const [thinkingSources, setThinkingSources] = useState<string[]>([]);
   const flatListRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
 
@@ -1900,7 +1903,10 @@ export default function ChatScreen() {
           if (data === "[DONE]") break;
           try {
             const parsed = JSON.parse(data);
-            if (parsed.type === "skill_active") {
+            if (parsed.type === "status") {
+              setThinkingStep(parsed.step as ThinkingStep);
+              if (parsed.sources) setThinkingSources(parsed.sources);
+            } else if (parsed.type === "skill_active") {
               finalSkillName = parsed.skillName || undefined;
               finalSkillAutoDetected = parsed.wasAutoDetected ?? undefined;
               setDetectedSkill({
@@ -1935,6 +1941,7 @@ export default function ChatScreen() {
                 filename: parsed.craft.filename,
               };
             } else if (parsed.content) {
+              if (!fullContent) { setThinkingStep(null); setThinkingSources([]); }
               fullContent += parsed.content;
               const displayContent = fullContent
                 .replace(/\|\|\|DOCUMENT_REQUEST\|\|\|[\s\S]*$/, "")
@@ -2042,6 +2049,8 @@ export default function ChatScreen() {
       setStreamingText("");
     } finally {
       setIsSending(false);
+      setThinkingStep(null);
+      setThinkingSources([]);
     }
   }, [input, isSending, messages, memory, mode, explainLevel, isPrivate, deviceId, replyTo, attachments]);
 
@@ -2266,7 +2275,13 @@ export default function ChatScreen() {
           showsVerticalScrollIndicator={false}
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
-          ListHeaderComponent={showTyping ? <TypingDots /> : null}
+          ListHeaderComponent={
+            thinkingStep ? (
+              <ThinkingIndicator step={thinkingStep} sources={thinkingSources} />
+            ) : showTyping ? (
+              <TypingDots />
+            ) : null
+          }
           ListFooterComponent={
             isLoadingBrief ? (
               <View style={styles.briefLoading}>
