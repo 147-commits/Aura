@@ -207,6 +207,15 @@ const DEVICE_ID_KEY = "aura:device_id";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+function getSelectedSkillName(skillId: string, skillsByDomain: Record<string, SkillSummaryUI[]> | null): string {
+  if (!skillsByDomain) return "Skill";
+  for (const skills of Object.values(skillsByDomain)) {
+    const found = skills.find((s) => s.id === skillId);
+    if (found) return found.name;
+  }
+  return "Skill";
+}
+
 function generateId() {
   return Date.now().toString() + Math.random().toString(36).substr(2, 6);
 }
@@ -2213,7 +2222,7 @@ export default function ChatScreen() {
                 <Text style={{ color: C.accentWarm }}>✦ </Text>
               )}
               {activeSkillId
-                ? (detectedSkill?.skillName || "Skill")
+                ? getSelectedSkillName(activeSkillId, skillsByDomain)
                 : (detectedSkill?.skillName
                   ? detectedSkill.skillName
                   : "General")}
