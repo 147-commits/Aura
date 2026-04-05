@@ -1,5 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
 import { Text, View, ScrollView, StyleSheet, Platform, Pressable } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
+import * as Haptics from "expo-haptics";
 import { C } from "./types";
 import { openLink, parseLinksInText } from "@/lib/link-utils";
 
@@ -38,7 +41,9 @@ type Block =
   | { type: "code"; language: string; code: string }
   | { type: "blockquote"; text: string }
   | { type: "bullet"; items: string[] }
-  | { type: "numbered"; items: string[] };
+  | { type: "numbered"; items: string[] }
+  | { type: "hr" }
+  | { type: "table"; headers: string[]; rows: string[][] };
 
 function parseMarkdown(text: string): Block[] {
   const lines = text.split("\n");
@@ -67,6 +72,26 @@ function parseMarkdown(text: string): Block[] {
     if (headingMatch) {
       blocks.push({ type: "heading", level: headingMatch[1].length, text: headingMatch[2] });
       i++;
+      continue;
+    }
+
+    // Horizontal rule
+    if (/^[-*_]{3,}\s*$/.test(line)) {
+      blocks.push({ type: "hr" });
+      i++;
+      continue;
+    }
+
+    // Table (detect | header | header | pattern)
+    if (line.includes("|") && i + 1 < lines.length && /^[\s|:-]+$/.test(lines[i + 1])) {
+      const headers = line.split("|").map((h) => h.trim()).filter(Boolean);
+      i += 2; // skip header + separator
+      const rows: string[][] = [];
+      while (i < lines.length && lines[i].includes("|")) {
+        rows.push(lines[i].split("|").map((c) => c.trim()).filter(Boolean));
+        i++;
+      }
+      blocks.push({ type: "table", headers, rows });
       continue;
     }
 
@@ -132,13 +157,29 @@ function renderBlock(block: Block, key: number): React.ReactElement {
       );
 
     case "code":
+      return <CodeBlock key={key} language={block.language} code={block.code} />;
+
+    case "hr":
+      return <View key={key} style={mdStyles.hr} />;
+
+    case "table":
       return (
-        <View key={key} style={mdStyles.codeBlock}>
-          <Text style={mdStyles.codeLang}>{block.language}</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <Text style={mdStyles.codeText} selectable>{block.code}</Text>
-          </ScrollView>
-        </View>
+        <ScrollView key={key} horizontal showsHorizontalScrollIndicator={false} style={mdStyles.tableWrap}>
+          <View>
+            <View style={mdStyles.tableHeaderRow}>
+              {block.headers.map((h, hi) => (
+                <Text key={hi} style={mdStyles.tableHeader}>{h}</Text>
+              ))}
+            </View>
+            {block.rows.map((row, ri) => (
+              <View key={ri} style={[mdStyles.tableRow, ri % 2 === 1 && mdStyles.tableRowAlt]}>
+                {row.map((cell, ci) => (
+                  <Text key={ci} style={mdStyles.tableCell}>{cell}</Text>
+                ))}
+              </View>
+            ))}
+          </View>
+        </ScrollView>
       );
 
     case "blockquote":
@@ -180,6 +221,33 @@ function renderBlock(block: Block, key: number): React.ReactElement {
         </Text>
       );
   }
+}
+
+// ── Code Block with copy button ─────────────────────────────────────────────
+
+function CodeBlock({ language, code }: { language: string; code: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await Clipboard.setStringAsync(code);
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <View style={mdStyles.codeBlock}>
+      <View style={mdStyles.codeHeader}>
+        <Text style={mdStyles.codeLang}>{language}</Text>
+        <Pressable onPress={handleCopy} hitSlop={8} style={mdStyles.codeCopyBtn}>
+          <Ionicons name={copied ? "checkmark" : "copy-outline"} size={14} color={copied ? "#6EE7B7" : "#888"} />
+        </Pressable>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <Text style={mdStyles.codeText} selectable>{code}</Text>
+      </ScrollView>
+    </View>
+  );
 }
 
 // ── Inline rendering (bold, italic, code, links) ────────────────────────────
@@ -265,6 +333,13 @@ const mdStyles = StyleSheet.create({
     padding: 14,
     marginVertical: 8,
     gap: 6,
+    borderWidth: 0.5,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  codeHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
   codeLang: {
     fontSize: 11,
@@ -272,6 +347,9 @@ const mdStyles = StyleSheet.create({
     color: "#888",
     textTransform: "uppercase",
     letterSpacing: 0.5,
+  },
+  codeCopyBtn: {
+    padding: 4,
   },
   codeText: {
     fontSize: 13,
@@ -305,6 +383,42 @@ const mdStyles = StyleSheet.create({
     color: C.textSecondary,
     fontFamily: "Inter_400Regular",
     fontStyle: "italic",
+  },
+  hr: {
+    height: 0.5,
+    backgroundColor: C.border,
+    marginVertical: 12,
+  },
+  tableWrap: { marginVertical: 8 },
+  tableHeaderRow: {
+    flexDirection: "row",
+    backgroundColor: C.accent,
+    borderTopLeftRadius: 6,
+    borderTopRightRadius: 6,
+  },
+  tableHeader: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+    color: "#FFFFFF",
+    minWidth: 80,
+  },
+  tableRow: {
+    flexDirection: "row",
+    borderBottomWidth: 0.5,
+    borderBottomColor: C.border,
+  },
+  tableRowAlt: {
+    backgroundColor: C.surfaceSecondary,
+  },
+  tableCell: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    color: C.text,
+    minWidth: 80,
   },
   list: { marginBottom: 8, gap: 4 },
   listItem: {
