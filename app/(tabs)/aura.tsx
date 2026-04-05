@@ -1064,16 +1064,6 @@ function MessageBubble({
 
   const isResearch = message.mode && message.mode !== "chat";
 
-  const handleCopy = () => {
-    Clipboard.setStringAsync(message.content);
-    setShowActions(false);
-  };
-
-  const handleReply = () => {
-    setShowActions(false);
-    onReply(message);
-  };
-
   const replySource = message.replyTo
     ? allMessages.find((m) => m.id === message.replyTo!.id)
     : null;
@@ -1728,6 +1718,7 @@ export default function ChatScreen() {
         "text/csv",
         "application/json",
         "text/markdown",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       ],
     });
     if (!result.canceled && result.assets.length > 0) {
