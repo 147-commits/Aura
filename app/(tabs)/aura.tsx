@@ -1017,6 +1017,7 @@ function MessageBubble({
   onWrapUpSaveToProject,
   onConfidenceTap,
   onCraftPreview,
+  onRegenerate,
   allMessages,
   deviceId,
 }: {
