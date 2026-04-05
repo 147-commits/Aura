@@ -9,8 +9,9 @@ export function getApiUrl(): string {
   let host = process.env.EXPO_PUBLIC_DOMAIN;
 
   if (!host) {
-    // Local development fallback
-    return "http://localhost:3000";
+    // Web uses localhost, mobile devices use PC's local IP
+    const isWeb = typeof window !== "undefined" && typeof document !== "undefined";
+    return isWeb ? "http://localhost:3000" : "http://192.168.0.15:3000";
   }
 
   let url = new URL(`https://${host}`);

@@ -216,7 +216,7 @@ function setupErrorHandler(app: express.Application) {
 
   const port = parseInt(process.env.PORT || "3000", 10);
   server.listen(
-    { port, host: "127.0.0.1" },
+    { port, host: "0.0.0.0" },
     () => {
       log(`Aura server running on port ${port}`);
       log(`Auth: device-id based with validation`);
