@@ -83,36 +83,36 @@ export async function extractAndSaveMemories(
       messages: [
         {
           role: "user",
-          content: `You are Aura's memory extraction system. Extract 0–3 stable, helpful memory candidates from this message.
+          content: `You are Aura's memory extraction system. Be AGGRESSIVE about detecting useful context. Extract 0–5 memory candidates from this message. It's better to save too much than too little — the user wants Aura to remember things.
 
 Message: "${message}"
 
-STORE ONLY:
-- preferences (tone, brevity, explain style, communication style)
-- goals (what the user wants to achieve)
-- projects (ongoing work the user is doing)
-- constraints (budget, schedule, location, device, team size)
+EXTRACT THESE (be generous):
+→ preferences: "I prefer...", "I like...", "I don't want...", "I always use...", "I'm a fan of...", coding preferences, tool preferences, communication style, even implicit ones like "I use TypeScript for everything" → preference
+→ goals: "I want to...", "My goal is...", "I'm trying to...", "I plan to...", aspirations, targets
+→ projects: "I'm building...", "I'm working on...", project names, tech stacks, product descriptions
+→ constraints: "I can't...", "My budget is...", "I only have...", deadlines, team size, resources
+→ context: job titles, company names, locations, industry, team composition, experience level, role
+
+FORCE SAVE (always extract regardless of confidence):
+→ If user says "remember this", "don't forget", "save this to memory", "keep in mind" — ALWAYS extract it
 
 DO NOT STORE:
-- greetings, casual remarks, or small talk
-- questions the user asks
-- one-off casual comments with no long-term utility
-- sensitive personal data (health details, financial account info, passwords, private legal matters)
-- anything the user marked as private, secret, or "don't remember"
-- vague or ambiguous statements
+→ greetings, "hello", "thanks", small talk
+→ questions without personal context (e.g., "what is Python?" has no personal info)
+→ sensitive data: passwords, SSNs, credit card numbers, medical diagnoses, financial account numbers
+→ anything marked as "private", "secret", or "don't remember"
 
-ACCURACY RULES:
-- Memory text must accurately reflect what the user ACTUALLY said
-- Do not overgeneralize from a single sentence
-- Keep memory text concise but faithful
-- When in doubt, do NOT store
-
-Only extract if confidence >= 0.7.
+RULES:
+→ When in doubt, STORE with Medium confidence — users want to be remembered
+→ Memory text should be concise but faithful (≤20 words)
+→ Extract from implicit statements too: "We use Next.js" → project context
+→ Multiple extractions from one message are encouraged
 
 Return ONLY valid JSON:
-{"shouldRemember": boolean, "items": [{"text": "concise fact in ≤15 words", "category": "preference|goal|project|constraint", "confidence": "High|Medium|Low"}]}
+{"shouldRemember": boolean, "items": [{"text": "concise memory", "category": "preference|goal|project|constraint|context", "confidence": "High|Medium|Low"}]}
 
-If nothing worth remembering: {"shouldRemember": false, "items": []}`,
+If truly nothing worth remembering: {"shouldRemember": false, "items": []}`,
         },
       ],
       max_completion_tokens: 300,

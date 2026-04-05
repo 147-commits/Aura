@@ -531,7 +531,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!isPrivate && userId && conversationId) {
         await saveMessage(conversationId, "user", lastUserMessage, { mode, explainLevel, rememberFlag, isPrivate });
         await saveMessage(conversationId, "assistant", cleanContent, { mode, confidence, explainLevel });
-        if (rememberFlag) extractAndSaveMemories(userId, lastUserMessage, openai).catch(console.error);
+        if (rememberFlag) {
+          try {
+            const savedMemories = await extractAndSaveMemories(userId, lastUserMessage, openai);
+            if (savedMemories.length > 0) {
+              res.write(`data: ${JSON.stringify({
+                type: "memory_saved",
+                memories: savedMemories.map((m) => ({ category: m.category, text: m.text })),
+              })}\n\n`);
+            }
+          } catch (memErr) { console.error("Memory extraction error:", memErr); }
+        }
         await conversationHeartbeat(conversationId);
         // Memory consolidation check (every 10th request, async)
         if (shouldCheckConsolidation(userId)) {

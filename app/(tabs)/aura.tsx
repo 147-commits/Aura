@@ -34,6 +34,7 @@ import { CraftCard } from "@/components/crafts/CraftCard";
 import { CraftPreview } from "@/components/crafts/CraftPreview";
 import { MessageActions } from "@/components/chat/MessageActions";
 import { ThinkingIndicator, type ThinkingStep } from "@/components/chat/ThinkingIndicator";
+import { MemoryNotification } from "@/components/chat/MemoryNotification";
 
 const C = Colors.dark;
 
@@ -1387,6 +1388,7 @@ export default function ChatScreen() {
   const [previewCraft, setPreviewCraft] = useState<Message["craft"] | null>(null);
   const [thinkingStep, setThinkingStep] = useState<ThinkingStep | null>(null);
   const [thinkingSources, setThinkingSources] = useState<string[]>([]);
+  const [savedMemory, setSavedMemory] = useState<{ text: string; category: string } | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
 
@@ -1913,7 +1915,9 @@ export default function ChatScreen() {
           if (data === "[DONE]") break;
           try {
             const parsed = JSON.parse(data);
-            if (parsed.type === "status") {
+            if (parsed.type === "memory_saved" && parsed.memories?.length > 0) {
+              setSavedMemory({ text: parsed.memories[0].text, category: parsed.memories[0].category });
+            } else if (parsed.type === "status") {
               setThinkingStep(parsed.step as ThinkingStep);
               if (parsed.sources) setThinkingSources(parsed.sources);
             } else if (parsed.type === "skill_active") {
@@ -2286,7 +2290,14 @@ export default function ChatScreen() {
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
           ListHeaderComponent={
-            thinkingStep ? (
+            savedMemory ? (
+              <MemoryNotification
+                text={savedMemory.text}
+                category={savedMemory.category}
+                onDismiss={() => setSavedMemory(null)}
+                onTap={() => router.navigate("/(tabs)/memory")}
+              />
+            ) : thinkingStep ? (
               <ThinkingIndicator step={thinkingStep} sources={thinkingSources} />
             ) : showTyping ? (
               <TypingDots />
