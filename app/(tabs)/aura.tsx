@@ -36,6 +36,7 @@ import { MessageActions } from "@/components/chat/MessageActions";
 import { ThinkingIndicator, type ThinkingStep } from "@/components/chat/ThinkingIndicator";
 import { MemoryNotification } from "@/components/chat/MemoryNotification";
 import { ScrollToBottomButton } from "@/components/chat/ScrollToBottomButton";
+import { EmptyState } from "@/components/chat/EmptyState";
 
 const C = Colors.dark;
 
@@ -2261,7 +2262,14 @@ export default function ChatScreen() {
         behavior="padding"
         keyboardVerticalOffset={0}
       >
-        {/* Messages — inverted FlatList */}
+        {/* Empty state or Messages */}
+        {displayMessages.length === 0 && !isSending ? (
+          <EmptyState onSuggestion={(text, suggMode) => {
+            setMode(suggMode as any);
+            setInput(text);
+            setTimeout(() => sendMessage(), 100);
+          }} />
+        ) : (<>
         <FlatList
           ref={flatListRef}
           data={displayMessages}
@@ -2330,6 +2338,8 @@ export default function ChatScreen() {
             setIsNearBottom(true);
             setShowScrollBtn(false);
           }} />
+        )}
+        </>
         )}
 
         {/* Input Area */}
