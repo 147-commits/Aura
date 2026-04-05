@@ -1148,6 +1148,59 @@ Keep each field under 15 words. Be specific and personal. Never invent facts you
     }
   });
 
+  // ─── PROJECT CONNECTIONS ───────────────────────────────────────────────
+  app.get("/api/projects/:id/overview", requireAuth, async (req, res) => {
+    try {
+      const { getProjectOverview } = await import("./productivity-engine");
+      const overview = await getProjectOverview(req.params.id as string, req.userId!);
+      res.json(overview);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch project overview" });
+    }
+  });
+
+  app.post("/api/projects/:id/conversations", requireAuth, async (req, res) => {
+    try {
+      const { linkConversationToProject } = await import("./productivity-engine");
+      const { conversationId } = req.body;
+      if (!conversationId) return res.status(400).json({ error: "conversationId required" });
+      await linkConversationToProject(conversationId, req.params.id as string);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to link conversation" });
+    }
+  });
+
+  app.get("/api/projects/:id/conversations", requireAuth, async (req, res) => {
+    try {
+      const { getProjectConversations } = await import("./productivity-engine");
+      const conversations = await getProjectConversations(req.params.id as string, req.userId!);
+      res.json(conversations);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch conversations" });
+    }
+  });
+
+  app.get("/api/projects/:id/crafts", requireAuth, async (req, res) => {
+    try {
+      const { getProjectCrafts } = await import("./productivity-engine");
+      const crafts = await getProjectCrafts(req.params.id as string, req.userId!);
+      res.json(crafts);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch crafts" });
+    }
+  });
+
+  app.patch("/api/projects/:id/notes", requireAuth, async (req, res) => {
+    try {
+      const { updateProjectNotes } = await import("./productivity-engine");
+      await updateProjectNotes(req.params.id as string, req.userId!, req.body.notes || "");
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to update notes" });
+    }
+  });
+
   // ─── TODAY / DAILY PLAN ───────────────────────────────────────────────
   app.get("/api/today", async (req, res) => {
     try {

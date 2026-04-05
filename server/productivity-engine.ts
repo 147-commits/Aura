@@ -378,3 +378,47 @@ Rules:
     return [];
   }
 }
+
+// ─── Project Connections ────────────────────────────────────────────────────
+
+export async function linkConversationToProject(conversationId: string, projectId: string): Promise<void> {
+  await query("UPDATE conversations SET project_id = $1 WHERE id = $2", [projectId, conversationId]);
+}
+
+export async function getProjectConversations(projectId: string, userId: string): Promise<any[]> {
+  return query(
+    `SELECT c.id, c.title, c.created_at, c.updated_at,
+       (SELECT content_plaintext FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message
+     FROM conversations c WHERE c.project_id = $1 AND c.user_id = $2 ORDER BY c.updated_at DESC`,
+    [projectId, userId]
+  );
+}
+
+export async function getProjectCrafts(projectId: string, userId: string): Promise<any[]> {
+  return query(
+    `SELECT id, kind, title_encrypted, is_encrypted, filename, created_at
+     FROM crafts WHERE project_id = $1 AND user_id = $2 ORDER BY created_at DESC`,
+    [projectId, userId]
+  );
+}
+
+export async function getProjectOverview(projectId: string, userId: string): Promise<{
+  conversations: number;
+  crafts: number;
+  tasks: number;
+}> {
+  const [convs, crafts, tasks] = await Promise.all([
+    queryOne<{ count: string }>("SELECT COUNT(*)::text as count FROM conversations WHERE project_id = $1 AND user_id = $2", [projectId, userId]),
+    queryOne<{ count: string }>("SELECT COUNT(*)::text as count FROM crafts WHERE project_id = $1 AND user_id = $2", [projectId, userId]),
+    queryOne<{ count: string }>("SELECT COUNT(*)::text as count FROM tasks WHERE project_id = $1 AND user_id = $2", [projectId, userId]),
+  ]);
+  return {
+    conversations: parseInt(convs?.count || "0"),
+    crafts: parseInt(crafts?.count || "0"),
+    tasks: parseInt(tasks?.count || "0"),
+  };
+}
+
+export async function updateProjectNotes(projectId: string, userId: string, notes: string): Promise<void> {
+  await query("UPDATE projects SET notes = $1 WHERE id = $2 AND user_id = $3", [notes, projectId, userId]);
+}

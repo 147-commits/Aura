@@ -30,6 +30,14 @@ export async function initDatabase(): Promise<void> {
     await client.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS parent_conversation_id UUID`).catch(() => {});
     await client.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS branch_point_message_id UUID`).catch(() => {});
 
+    // Project connections — link conversations, crafts, and memories to projects
+    await client.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id) ON DELETE SET NULL`).catch(() => {});
+    await client.query(`ALTER TABLE crafts ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id) ON DELETE SET NULL`).catch(() => {});
+    await client.query(`ALTER TABLE memories ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id) ON DELETE SET NULL`).catch(() => {});
+    await client.query(`ALTER TABLE projects ADD COLUMN IF NOT EXISTS notes TEXT DEFAULT ''`).catch(() => {});
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_conversations_project ON conversations(project_id) WHERE project_id IS NOT NULL`).catch(() => {});
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_crafts_project ON crafts(project_id) WHERE project_id IS NOT NULL`).catch(() => {});
+
     // ─── Conversations ─────────────────────────────────────────────────
     await client.query(`
       CREATE TABLE IF NOT EXISTS conversations (
