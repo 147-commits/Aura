@@ -10,4 +10,5 @@ export { InlineCitation } from "./InlineCitation";
 export { SourceQualityBar } from "./SourceQualityBar";
 export { DisagreementCard } from "./DisagreementCard";
 export { VerifyButton } from "./VerifyButton";
+export { MessageActions } from "./MessageActions";
 export * from "./types";

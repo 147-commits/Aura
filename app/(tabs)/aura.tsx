@@ -32,6 +32,7 @@ import Colors from "@/constants/colors";
 import { useIsWideWeb } from "@/components/WebContainer";
 import { CraftCard } from "@/components/crafts/CraftCard";
 import { CraftPreview } from "@/components/crafts/CraftPreview";
+import { MessageActions } from "@/components/chat/MessageActions";
 
 const C = Colors.dark;
 
@@ -1027,11 +1028,11 @@ function MessageBubble({
   onWrapUpSaveToProject: () => void;
   onConfidenceTap: (confidence: Confidence, reason: string) => void;
   onCraftPreview: (craft: Message["craft"]) => void;
+  onRegenerate: (userMessage: string) => void;
   allMessages: Message[];
   deviceId: string;
 }) {
   const isUser = message.role === "user";
-  const [showActions, setShowActions] = useState(false);
 
   if (message.type === "brief" && message.briefData) {
     return (
@@ -1132,8 +1133,6 @@ function MessageBubble({
         )}
 
         <Pressable
-          onLongPress={() => setShowActions(true)}
-          delayLongPress={400}
           style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAgent]}
         >
           <FormattedText
@@ -1143,22 +1142,20 @@ function MessageBubble({
           />
         </Pressable>
 
-        {showActions && (
-          <Animated.View entering={FadeInDown.duration(150)} style={[styles.actionBar, isUser && styles.actionBarUser]}>
-            <Pressable onPress={handleCopy} style={styles.actionBtn}>
-              <Ionicons name="copy-outline" size={14} color={C.textSecondary} />
-              <Text style={styles.actionBtnText}>Copy</Text>
-            </Pressable>
-            <View style={styles.actionDivider} />
-            <Pressable onPress={handleReply} style={styles.actionBtn}>
-              <Ionicons name="arrow-undo-outline" size={14} color={C.textSecondary} />
-              <Text style={styles.actionBtnText}>Reply</Text>
-            </Pressable>
-            <View style={styles.actionDivider} />
-            <Pressable onPress={() => setShowActions(false)} style={styles.actionBtn}>
-              <Ionicons name="close-outline" size={14} color={C.textTertiary} />
-            </Pressable>
-          </Animated.View>
+        {!isUser && message.type === "text" && (
+          <MessageActions
+            messageText={message.content}
+            messageId={message.id}
+            deviceId={deviceId}
+            onRegenerate={() => {
+              // Find the user message that preceded this AI response
+              const msgIndex = allMessages.findIndex((m) => m.id === message.id);
+              if (msgIndex > 0) {
+                const prevUserMsg = allMessages.slice(0, msgIndex).reverse().find((m) => m.role === "user");
+                if (prevUserMsg) onRegenerate(prevUserMsg.content);
+              }
+            }}
+          />
         )}
 
         {!isUser && message.confidence && (
@@ -2263,6 +2260,12 @@ export default function ChatScreen() {
               onWrapUpSaveToProject={handleWrapUpSaveToProject}
               onConfidenceTap={(c, r) => setShowConfidencePopup({ confidence: c, reason: r })}
               onCraftPreview={(craft) => setPreviewCraft(craft || null)}
+              onRegenerate={(userMsg) => {
+                // Remove last AI response and re-send
+                setMessages((prev) => prev.filter((m) => m.id !== item.id));
+                setInput(userMsg);
+                setTimeout(() => sendMessage(), 100);
+              }}
               allMessages={messages}
               deviceId={deviceId}
             />
