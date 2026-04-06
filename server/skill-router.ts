@@ -76,6 +76,19 @@ const DOMAIN_KEYWORDS: Record<SkillDomain, string[]> = {
   ],
 };
 
+/** Strong keywords — a single match is enough to trigger the domain */
+const STRONG_KEYWORDS: Record<SkillDomain, string[]> = {
+  engineering: ["microservices", "kubernetes", "docker", "ci/cd", "system design", "database schema", "api design", "monolith", "scalability"],
+  marketing: ["gtm", "go-to-market", "ideal customer profile", "content strategy"],
+  product: ["prd", "user story", "acceptance criteria", "wireframe", "product requirements"],
+  finance: ["mrr", "arr", "burn rate", "runway", "valuation", "unit economics", "cap table", "ebitda", "p&l"],
+  leadership: ["okr", "org design", "board meeting", "investor update", "co-founder conflict"],
+  operations: ["scrum", "kanban", "retrospective", "sprint planning", "runbook"],
+  legal: ["NDA", "GDPR", "CCPA", "HIPAA", "SOX", "terms of service", "indemnification"],
+  education: ["curriculum", "lesson plan", "syllabus", "learning objectives", "pedagogy", "backward design"],
+  health: ["workout plan", "nutrition plan", "meal prep", "exercise routine", "sleep hygiene"],
+};
+
 /** Minimum keyword matches required to trigger a domain */
 const MATCH_THRESHOLD = 2;
 
@@ -104,6 +117,17 @@ export function scoreDomains(message: string): Record<SkillDomain, number> {
  * Returns the highest-scoring domain if it meets the threshold, or null.
  */
 export function heuristicDomain(message: string): SkillDomain | null {
+  const lower = message.toLowerCase();
+
+  // Check strong keywords first — single match is enough
+  for (const domain of DOMAINS) {
+    if (STRONG_KEYWORDS[domain].some((kw) => lower.includes(kw.toLowerCase()))) {
+      console.log(`[skill-router] Layer 1 strong keyword: ${domain}`);
+      return domain;
+    }
+  }
+
+  // Regular scoring — requires threshold of 2
   const scores = scoreDomains(message);
   let best: SkillDomain | null = null;
   let bestScore = 0;
@@ -166,8 +190,8 @@ Message: ${message.slice(0, 300)}`,
 // ── Routing Result ──────────────────────────────────────────────────────────
 
 export interface RouteResult {
-  /** Primary domain detected */
-  primary: SkillDomain;
+  /** Primary domain detected, or null when AI classified as "general" */
+  primary: SkillDomain | null;
   /** Secondary domain for chaining, or null if single-domain query */
   secondary: SkillDomain | null;
   /** Which layer made the primary decision */
@@ -224,8 +248,8 @@ export async function routeSkills(
   const aiDomain = await detectDomainAI(message, fullContext, openai);
 
   if (aiDomain === "general") {
-    // No specific domain detected — return engineering as safe default
-    return { primary: "engineering", secondary: null, layer: "ai" };
+    // No specific domain detected — no skill should activate
+    return { primary: null as any, secondary: null, layer: "ai" };
   }
 
   return { primary: aiDomain, secondary: null, layer: "ai" };

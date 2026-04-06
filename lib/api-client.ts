@@ -114,6 +114,7 @@ export interface ChatStreamCallbacks {
   onAttachmentContext: (attachments: any[]) => void;
   onDone: (fullContent: string) => void;
   onError: (error: Error) => void;
+  onSkillActive?: (info: { primary: string; secondary?: string; skillName: string; wasAutoDetected: boolean }) => void;
 }
 
 export async function streamChat(
@@ -123,6 +124,8 @@ export async function streamChat(
     explainLevel: ExplainLevel;
     isPrivate: boolean;
     autoDetectMode: boolean;
+    activeSkillId?: string | null;
+    conversationId?: string | null;
     attachments?: { uri: string; name: string; type: string }[];
   },
   callbacks: ChatStreamCallbacks
@@ -140,6 +143,8 @@ export async function streamChat(
       formData.append("isPrivate", String(options.isPrivate));
       formData.append("rememberFlag", String(!options.isPrivate));
       formData.append("autoDetectMode", String(options.autoDetectMode));
+      if (options.activeSkillId) formData.append("activeSkillId", options.activeSkillId);
+      if (options.conversationId) formData.append("conversationId", options.conversationId);
 
       for (const att of options.attachments) {
         formData.append("attachments", { uri: att.uri, name: att.name, type: att.type } as any);
@@ -161,6 +166,8 @@ export async function streamChat(
           isPrivate: options.isPrivate,
           rememberFlag: !options.isPrivate,
           autoDetectMode: options.autoDetectMode,
+          ...(options.activeSkillId ? { activeSkillId: options.activeSkillId } : {}),
+          ...(options.conversationId ? { conversationId: options.conversationId } : {}),
         }),
       });
     }
@@ -204,6 +211,8 @@ export async function streamChat(
             callbacks.onModelTier(parsed.tier);
           } else if (parsed.type === "attachment_context") {
             callbacks.onAttachmentContext(parsed.attachments);
+          } else if (parsed.type === "skill_active") {
+            callbacks.onSkillActive?.(parsed);
           } else if (parsed.content) {
             fullContent += parsed.content;
             callbacks.onContent(fullContent);

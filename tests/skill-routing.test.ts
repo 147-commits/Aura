@@ -62,7 +62,7 @@ describe("heuristicDomain() — threshold behavior", () => {
   assert(heuristicDomain("what time is it?") === null, "General question → null");
   assert(heuristicDomain("api") === null, "Single keyword → null (threshold is 2)");
   assert(heuristicDomain("revenue") === null, "Single finance keyword → null");
-  assert(heuristicDomain("scrum") === null, "Single ops keyword → null");
+  assert(heuristicDomain("scrum") === "operations", "Single strong keyword 'scrum' → operations");
 });
 
 describe("heuristicDomain() — engineering detection", () => {
@@ -214,12 +214,12 @@ describe("heuristicDomain() — edge cases and tricky inputs", () => {
     "1 eng + 1 fin keyword → null (neither reaches threshold)"
   );
   assert(
-    heuristicDomain("scrum pricing") === null,
-    "1 ops + 0 fin → null"
+    heuristicDomain("scrum pricing") === "operations",
+    "Strong keyword 'scrum' → operations (even with unrelated word)"
   );
   assert(
-    heuristicDomain("culture wireframe") === null,
-    "1 leadership + 1 product → null"
+    heuristicDomain("culture wireframe") === "product",
+    "Strong keyword 'wireframe' → product"
   );
 
   // Message with code snippets
