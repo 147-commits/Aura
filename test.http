@@ -1,0 +1,509 @@
+@baseUrl = http://localhost:3000
+@deviceId = my-test-device
+@apiKey = aura_REPLACE_THIS_AFTER_STEP_1
+
+# ═══════════════════════════════════════════════════════════
+# AURA API — Complete Endpoint Test File
+# Run with VS Code REST Client extension
+# ═══════════════════════════════════════════════════════════
+
+# ─── HEALTH ──────────────────────────────────────────────
+
+### 1. Health check
+GET {{baseUrl}}/api/health
+
+# ─── CHAT ────────────────────────────────────────────────
+
+### 2. Send chat message
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+x-device-id: {{deviceId}}
+Accept: text/event-stream
+
+{
+  "messages": [{"role": "user", "content": "Hello, how are you?"}],
+  "mode": "chat",
+  "explainLevel": "normal",
+  "isPrivate": false,
+  "rememberFlag": true,
+  "autoDetectMode": false
+}
+
+### 3. Send chat with skill
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+x-device-id: {{deviceId}}
+Accept: text/event-stream
+
+{
+  "messages": [{"role": "user", "content": "Help me design my database schema"}],
+  "mode": "chat",
+  "explainLevel": "normal",
+  "activeSkillId": "engineering-architect"
+}
+
+### 4. Send chat with conversationId
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+x-device-id: {{deviceId}}
+Accept: text/event-stream
+
+{
+  "messages": [{"role": "user", "content": "Continue our discussion"}],
+  "mode": "chat",
+  "conversationId": "REPLACE_WITH_CONVERSATION_ID"
+}
+
+# ─── CONVERSATIONS ───────────────────────────────────────
+
+### 5. List conversations
+GET {{baseUrl}}/api/conversations
+x-device-id: {{deviceId}}
+
+### 6. Create new conversation
+POST {{baseUrl}}/api/conversations
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "title": "Project Planning"
+}
+
+### 7. Delete conversation
+DELETE {{baseUrl}}/api/conversations/REPLACE_WITH_ID
+x-device-id: {{deviceId}}
+
+### 8. Branch conversation
+POST {{baseUrl}}/api/conversations/branch
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "conversationId": "REPLACE_WITH_CONV_ID",
+  "messageId": "REPLACE_WITH_MSG_ID"
+}
+
+# ─── MESSAGES ────────────────────────────────────────────
+
+### 9. Get messages (latest conversation)
+GET {{baseUrl}}/api/messages
+x-device-id: {{deviceId}}
+
+### 10. Get messages for specific conversation
+GET {{baseUrl}}/api/messages?conversationId=REPLACE_WITH_ID
+x-device-id: {{deviceId}}
+
+# ─── RESEARCH ────────────────────────────────────────────
+
+### 11. Research query
+POST {{baseUrl}}/api/research
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "query": "What are the latest trends in AI for 2026?"
+}
+
+# ─── MEMORIES ────────────────────────────────────────────
+
+### 12. List memories
+GET {{baseUrl}}/api/memories
+x-device-id: {{deviceId}}
+
+### 13. Add memory
+POST {{baseUrl}}/api/memories
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "text": "User prefers TypeScript over JavaScript",
+  "category": "preference",
+  "confidence": "High"
+}
+
+### 14. Delete specific memory
+DELETE {{baseUrl}}/api/memories/REPLACE_WITH_ID
+x-device-id: {{deviceId}}
+
+### 15. Delete all memories
+DELETE {{baseUrl}}/api/memories
+x-device-id: {{deviceId}}
+
+### 16. Extract memory from text
+POST {{baseUrl}}/api/extract-memory
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "message": "I'm building a SaaS app with React Native and I prefer dark mode",
+  "save": true
+}
+
+### 17. Memory consolidation status
+GET {{baseUrl}}/api/memory/consolidation-status
+x-device-id: {{deviceId}}
+
+# ─── SKILLS ──────────────────────────────────────────────
+
+### 18. List all skills (grouped by domain)
+GET {{baseUrl}}/api/skills
+x-device-id: {{deviceId}}
+
+### 19. Get single skill
+GET {{baseUrl}}/api/skills/engineering-architect
+x-device-id: {{deviceId}}
+
+# ─── CRAFTS ──────────────────────────────────────────────
+
+### 20. Generate craft (DOCX)
+POST {{baseUrl}}/api/crafts/generate
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "kind": "docx",
+  "title": "Project Proposal",
+  "sections": [
+    {"heading": "Overview", "content_markdown": "This is the project overview."},
+    {"heading": "Goals", "content_markdown": "→ Goal 1\n→ Goal 2\n→ Goal 3"}
+  ]
+}
+
+### 21. Generate craft (HTML)
+POST {{baseUrl}}/api/crafts/generate
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "kind": "html",
+  "title": "Landing Page",
+  "content": "<html><body><h1>Hello World</h1></body></html>"
+}
+
+### 22. Generate craft (XLSX)
+POST {{baseUrl}}/api/crafts/generate
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "kind": "xlsx",
+  "title": "Budget Tracker",
+  "sheets": [{
+    "name": "Budget",
+    "columns": [{"header": "Category", "key": "cat"}, {"header": "Amount", "key": "amt"}],
+    "rows": [{"cat": "Rent", "amt": 2000}, {"cat": "Salary", "amt": 5000}]
+  }]
+}
+
+### 23. List crafts
+GET {{baseUrl}}/api/crafts
+x-device-id: {{deviceId}}
+
+### 24. Get craft detail
+GET {{baseUrl}}/api/crafts/REPLACE_WITH_ID
+x-device-id: {{deviceId}}
+
+### 25. Download craft
+GET {{baseUrl}}/api/crafts/REPLACE_WITH_ID/download
+x-device-id: {{deviceId}}
+
+### 26. Preview craft
+GET {{baseUrl}}/api/crafts/REPLACE_WITH_ID/preview
+x-device-id: {{deviceId}}
+
+### 27. Delete craft
+DELETE {{baseUrl}}/api/crafts/REPLACE_WITH_ID
+x-device-id: {{deviceId}}
+
+### 28. List craft templates
+GET {{baseUrl}}/api/craft-templates
+
+# ─── DOCUMENT EXPORT (legacy) ────────────────────────────
+
+### 29. Export PDF
+POST {{baseUrl}}/api/export
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "type": "pdf",
+  "title": "Test Document",
+  "filename": "test.pdf",
+  "sections": [
+    {"heading": "Introduction", "content_markdown": "Hello **world**."}
+  ]
+}
+
+# ─── BUILDER ─────────────────────────────────────────────
+
+### 30. Generate website
+POST {{baseUrl}}/api/builder/generate
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "prompt": "Build a personal portfolio website with dark theme",
+  "type": "website",
+  "name": "My Portfolio"
+}
+
+### 31. List builder projects
+GET {{baseUrl}}/api/builder/projects
+x-device-id: {{deviceId}}
+
+### 32. Get builder project
+GET {{baseUrl}}/api/builder/projects/REPLACE_WITH_ID
+x-device-id: {{deviceId}}
+
+### 33. Delete builder project
+DELETE {{baseUrl}}/api/builder/projects/REPLACE_WITH_ID
+x-device-id: {{deviceId}}
+
+### 34. Deploy to Vercel
+POST {{baseUrl}}/api/builder/projects/REPLACE_WITH_ID/deploy
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "vercelToken": "REPLACE_WITH_VERCEL_TOKEN"
+}
+
+# ─── TASKS ───────────────────────────────────────────────
+
+### 35. List tasks
+GET {{baseUrl}}/api/tasks
+x-device-id: {{deviceId}}
+
+### 36. Create task
+POST {{baseUrl}}/api/tasks
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "title": "Review architecture proposal",
+  "description": "Check the microservices design",
+  "priority": "high"
+}
+
+### 37. Update task
+PATCH {{baseUrl}}/api/tasks/REPLACE_WITH_ID
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "status": "done"
+}
+
+### 38. Delete task
+DELETE {{baseUrl}}/api/tasks/REPLACE_WITH_ID
+x-device-id: {{deviceId}}
+
+# ─── PROJECTS ────────────────────────────────────────────
+
+### 39. List projects
+GET {{baseUrl}}/api/projects
+x-device-id: {{deviceId}}
+
+### 40. Create project
+POST {{baseUrl}}/api/projects
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "name": "Aura v4",
+  "description": "Next version of the AI companion app"
+}
+
+### 41. Update project
+PATCH {{baseUrl}}/api/projects/REPLACE_WITH_ID
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "status": "active"
+}
+
+### 42. Delete project
+DELETE {{baseUrl}}/api/projects/REPLACE_WITH_ID
+x-device-id: {{deviceId}}
+
+### 43. Project overview (conversations + crafts + tasks counts)
+GET {{baseUrl}}/api/projects/REPLACE_WITH_ID/overview
+x-device-id: {{deviceId}}
+
+### 44. Link conversation to project
+POST {{baseUrl}}/api/projects/REPLACE_WITH_ID/conversations
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "conversationId": "REPLACE_WITH_CONV_ID"
+}
+
+### 45. List project conversations
+GET {{baseUrl}}/api/projects/REPLACE_WITH_ID/conversations
+x-device-id: {{deviceId}}
+
+### 46. List project crafts
+GET {{baseUrl}}/api/projects/REPLACE_WITH_ID/crafts
+x-device-id: {{deviceId}}
+
+### 47. Update project notes
+PATCH {{baseUrl}}/api/projects/REPLACE_WITH_ID/notes
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "notes": "Sprint 3: focus on onboarding flow"
+}
+
+# ─── TODAY / DAILY PLAN ──────────────────────────────────
+
+### 48. Get today's plan
+GET {{baseUrl}}/api/today
+x-device-id: {{deviceId}}
+
+### 49. Generate daily plan
+POST {{baseUrl}}/api/today/generate
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+# ─── DAILY BRIEF ─────────────────────────────────────────
+
+### 50. Get daily brief
+POST {{baseUrl}}/api/brief
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "memory": [],
+  "recentMessages": []
+}
+
+# ─── FEEDBACK ────────────────────────────────────────────
+
+### 51. Submit feedback (thumbs up)
+POST {{baseUrl}}/api/feedback
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "messageId": "REPLACE_WITH_MSG_ID",
+  "rating": "up"
+}
+
+### 52. Submit feedback (thumbs down with comment)
+POST {{baseUrl}}/api/feedback
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "messageId": "REPLACE_WITH_MSG_ID",
+  "rating": "down",
+  "comment": "Response was too long"
+}
+
+### 53. Get feedback summary
+GET {{baseUrl}}/api/feedback/summary
+x-device-id: {{deviceId}}
+
+# ─── EXTRACT ACTIONS ─────────────────────────────────────
+
+### 54. Extract action items from conversation
+POST {{baseUrl}}/api/extract-actions
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "message": "I need to review the PR by Friday and update the docs",
+  "assistantResponse": "Here's what you need to do: review the PR and update documentation."
+}
+
+# ─── KNOWLEDGE INGESTION ─────────────────────────────────
+
+### 55. Ingest knowledge document
+POST {{baseUrl}}/api/knowledge/ingest
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "content": "React Native uses a bridge to communicate between JavaScript and native code. The new architecture uses JSI (JavaScript Interface) for direct communication.",
+  "sourceType": "documentation",
+  "sourceTitle": "React Native Architecture",
+  "sourceUrl": "https://reactnative.dev/docs/architecture"
+}
+
+# ─── DATA EXPORT ─────────────────────────────────────────
+
+### 56. Export all user data (GDPR)
+GET {{baseUrl}}/api/export/all
+x-device-id: {{deviceId}}
+
+# ─── MCP CONNECTIONS ─────────────────────────────────────
+
+### 57. List MCP connections
+GET {{baseUrl}}/api/mcp/connections
+x-device-id: {{deviceId}}
+
+### 58. Add MCP connection
+POST {{baseUrl}}/api/mcp/connections
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "serverName": "filesystem",
+  "serverUrl": "http://localhost:3001/sse",
+  "transport": "sse"
+}
+
+### 59. Delete MCP connection
+DELETE {{baseUrl}}/api/mcp/connections/REPLACE_WITH_ID
+x-device-id: {{deviceId}}
+
+### 60. Call MCP tool
+POST {{baseUrl}}/api/mcp/tools/REPLACE_WITH_CONNECTION_ID/call
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "tool": "read_file",
+  "args": {"path": "/tmp/test.txt"}
+}
+
+# ─── API KEYS ────────────────────────────────────────────
+
+### 61. Create API key
+POST {{baseUrl}}/api/keys
+Content-Type: application/json
+x-device-id: {{deviceId}}
+
+{
+  "name": "My Test Key"
+}
+
+### 62. List API keys
+GET {{baseUrl}}/api/keys
+x-device-id: {{deviceId}}
+
+### 63. Revoke API key
+DELETE {{baseUrl}}/api/keys/REPLACE_WITH_KEY_ID
+x-device-id: {{deviceId}}
+
+# ─── GREETING ────────────────────────────────────────────
+
+### 64. Get personalized greeting
+GET {{baseUrl}}/api/greeting
+x-device-id: {{deviceId}}
+
+# ─── API v1 (Bearer token auth) ──────────────────────────
+
+### 65. Chat via API key
+POST {{baseUrl}}/api/v1/chat
+Content-Type: application/json
+Authorization: Bearer {{apiKey}}
+Accept: text/event-stream
+
+{
+  "messages": [{"role": "user", "content": "Hello from the API"}],
+  "mode": "chat"
+}
