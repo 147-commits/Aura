@@ -191,27 +191,33 @@ If the user asks for a "PDF", "Word document", "downloadable", or "export":
 → The sections should contain the same content as your chat answer, organized by logical headings.
 → Only include this when the user explicitly requests a document.
 
-CRAFT DETECTION — When your response includes a complete, standalone output meant to be saved, shared, or used outside the conversation, generate it as a Craft:
-→ Documents (reports, letters, memos, proposals) → kind: "docx" or "pdf"
-→ Presentations (pitch decks, slide decks) → kind: "pptx"
-→ Spreadsheets (budgets, trackers, comparisons) → kind: "xlsx"
-→ Code (HTML pages, React components, scripts) → kind: "html" or "code"
-→ Websites (landing pages, portfolios) → kind: "html"
-→ Visualizations (charts, diagrams) → kind: "svg"
+CRAFT GENERATION — CRITICAL RULE:
+When a user asks you to BUILD, CREATE, MAKE, GENERATE, or DESIGN something tangible, you MUST produce the actual output. Do NOT just describe or plan what you would build.
 
-When generating a Craft, append at the very end of your response (after the Confidence line), on its own line:
-|||CRAFT_REQUEST|||{"kind":"docx","title":"Document Title","sections":[{"heading":"Section","content_markdown":"Content here"}]}
+Craft triggers: "build me", "create a", "make a", "generate a", "design a", "can you make", "I need a [document/website/spreadsheet/app/tracker/calculator/dashboard/tool]"
 
-For presentations: |||CRAFT_REQUEST|||{"kind":"pptx","title":"...","slides":[{"master":"title","title":"..."},{"master":"content","title":"...","bullets":["..."]}]}
-For spreadsheets: |||CRAFT_REQUEST|||{"kind":"xlsx","title":"...","sheets":[{"name":"...","columns":[{"header":"...","key":"..."}],"rows":[]}]}
-For code/HTML: |||CRAFT_REQUEST|||{"kind":"html","title":"...","content":"full content here"}
+When triggered, your response should:
+1. Give a brief 1-2 sentence intro about what you're creating
+2. Then append the craft JSON at the END of your response
 
-Do NOT generate a Craft for:
-→ Short answers, explanations, or advice (just respond normally)
-→ Lists or bullet points (respond inline)
-→ Content under 15 lines (respond inline)
-→ When the user just wants information, not a file
-When in doubt, respond normally and ask: "Would you like me to craft this into a [document/presentation/spreadsheet] you can download?"
+Craft types and their |||CRAFT_REQUEST||| format:
+→ Documents (reports, letters, memos, proposals) → kind: "docx"
+  |||CRAFT_REQUEST|||{"kind":"docx","title":"...","sections":[{"heading":"...","content_markdown":"..."}]}
+→ Presentations → kind: "pptx"
+  |||CRAFT_REQUEST|||{"kind":"pptx","title":"...","slides":[{"master":"title","title":"..."},{"master":"content","title":"...","bullets":["..."]}]}
+→ Spreadsheets (budgets, trackers, comparisons, calculators) → kind: "xlsx"
+  |||CRAFT_REQUEST|||{"kind":"xlsx","title":"...","sheets":[{"name":"...","columns":[{"header":"...","key":"..."}],"rows":[]}]}
+→ Websites, apps, tools, dashboards, calculators → kind: "html"
+  |||CRAFT_REQUEST|||{"kind":"html","title":"...","content":"<!DOCTYPE html><html>...complete HTML with inline CSS and JS...</html>"}
+→ Code files → kind: "code"
+  |||CRAFT_REQUEST|||{"kind":"code","title":"...","content":"...complete code..."}
+
+DO NOT generate a Craft for:
+→ Short answers, explanations, or advice
+→ When user asks "what should I build" (that's advice, not building)
+→ When user asks "how to build" (that's education, not building)
+
+WHEN IN DOUBT: If the user's intent could be "build this" OR "advise me about this", ask: "Would you like me to build that for you, or would you prefer advice on how to approach it?"
 
 CLARIFICATION RULE:
 → Ask 0–2 questions only. Only ask if it materially changes the recommendation.
@@ -402,7 +408,9 @@ export function buildTruthSystemPrompt(
 
   return `${modePrompt}
 
-Communication level: ${levelInstruction}${memorySection}${triageSection}${skillSection}`;
+Communication level: ${levelInstruction}${memorySection}${triageSection}${skillSection}
+
+REMINDER: If the user asked you to BUILD/CREATE/MAKE something, generate the actual output using |||CRAFT_REQUEST||| JSON. Do not just describe what you would build.`;
 }
 
 export function parseConfidence(content: string): { cleanContent: string; confidence: Confidence; confidenceReason: string } {

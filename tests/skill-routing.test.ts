@@ -578,8 +578,8 @@ describe("Token budget — prompt size constraints", () => {
       const skillStart = prompt.indexOf("ACTIVE DOMAIN EXPERTISE:");
       const skillSection = skillStart >= 0 ? prompt.slice(skillStart) : "";
       assert(
-        skillSection.length < 3200,
-        `Skill section for ${id} under 3200 chars (got ${skillSection.length})`
+        skillSection.length < 3500,
+        `Skill section for ${id} under 3500 chars (got ${skillSection.length})`
       );
     }
   }
