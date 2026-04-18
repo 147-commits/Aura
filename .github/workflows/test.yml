@@ -1,0 +1,70 @@
+name: Aura Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  unit-tests:
+    name: Unit Tests (no API calls)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run all unit test suites
+        run: npm test
+
+      - name: Validate eval case structure
+        run: npx tsx scripts/run-eval.ts
+
+  quality-report:
+    name: Quality Report
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: unit-tests
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate quality report
+        run: npx tsx scripts/quality-report.ts
+
+# ─── NOTES ────────────────────────────────────────────────────────────────
+# All tests are pure unit tests — NO real API calls in CI.
+#
+# What's mocked/avoided:
+#   - OpenAI completions: not called (tests use pure functions only)
+#   - Anthropic completions: not called
+#   - Database queries: pg Pool is lazy (no connection at import time)
+#   - File system: tests don't write to disk
+#
+# What requires manual testing (before releases):
+#   - Full conversation flow with real models
+#   - Accuracy eval suite with live API responses
+#   - Voice pipeline end-to-end
+#   - Vercel deployment flow
+#   - Expo Snack integration
+#
+# To run API-dependent tests locally:
+#   Set OPENAI_API_KEY and ANTHROPIC_API_KEY in .env
+#   Then: npx tsx scripts/run-eval.ts --live
