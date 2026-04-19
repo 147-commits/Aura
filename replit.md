@@ -1,5 +1,13 @@
 # Aura — Truth-First AI Productivity Companion (Stage 3)
 
+## Three-Pillar Architecture
+
+Aura is the AI companion that knows you, tells you the truth, and can spin up a virtual company to ship what you're dreaming about. The product is built on three load-bearing pillars: a **Truth-First Engine** (the operating principle — confidence ratings, intent matching, anti-hallucination, anti-sycophancy, privacy) that governs every surface, a **Personal Companion** (always-free daily chat, encrypted memory, tasks, daily plans) that compounds over time, and a **Virtual Company Engine** (paid — 12 agents across 5 phases producing a working app preview plus a governance bundle of PRD, ADRs, test plan, threat model, deployment runbook, and GTM brief).
+
+Dropping any pillar weakens the product. Truth-First without the Companion is a better ChatGPT. The Companion without Truth-First is another chatbot that lies prettily. The pipeline without the Companion is v0 / Bolt / Lovable — a cold-start commodity. All three together are Aura.
+
+**Canonical reference:** [`docs/PRODUCT_IDENTITY.md`](docs/PRODUCT_IDENTITY.md) — single source of truth for product definition, non-negotiables, anti-identity, wedge customer, design principles, and success metrics.
+
 ## Overview
 
 Aura is a truth-first, privacy-first AI thinking partner and productivity companion built with Expo React Native. Stage 2 extends the chat with tab-based navigation, AI-powered action extraction, task/project management, and daily planning. Core principle: **one input, many outcomes** — the user types naturally and Aura detects tasks, projects, decisions, and context automatically.
@@ -234,7 +242,7 @@ The app is fully responsive — on desktop/wide screens (>=768px), a left sideba
 - **Tab bar**: Dark bg (mobile), sidebar (web desktop), accent blue active, textTertiary inactive
 
 ## AI Integration
-- Replit AI Integrations (OpenAI) — `AI_INTEGRATIONS_OPENAI_API_KEY`, `AI_INTEGRATIONS_OPENAI_BASE_URL`
+- Provider-neutral: OpenAI (`OPENAI_API_KEY`, optional `OPENAI_BASE_URL`) and Anthropic (`ANTHROPIC_API_KEY`). Selection happens in `server/providers/provider-registry.ts` — Anthropic is preferred for skill/frontier tiers when its key is present; OpenAI handles standard, mini, and embedding tiers.
 - Chat: gpt-5.2 | Research: gpt-4o-mini with web_search_preview tool
 - Daily plan generation: gpt-5.2
 
