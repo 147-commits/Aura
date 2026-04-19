@@ -326,7 +326,124 @@ export async function initDatabase(): Promise<void> {
     `);
     // Prompt version column — separate ALTER so pre-F5 installations pick it up.
     await client.query(`ALTER TABLE run_steps ADD COLUMN IF NOT EXISTS prompt_version TEXT`).catch(() => {});
+    await client.query(`ALTER TABLE run_steps ADD COLUMN IF NOT EXISTS latency_ms INTEGER`).catch(() => {});
     await client.query(`CREATE INDEX IF NOT EXISTS idx_run_steps_run ON run_steps(run_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_run_steps_agent ON run_steps(agent_id)`);
+
+    // ─── Orchestrator: canonical pipeline run record ───────────────────
+    // The persistent record of every Virtual Company Engine run. Separate
+    // from active_runs (which is the transient concurrency-guard table).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS pipeline_runs (
+        run_id UUID PRIMARY KEY,
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        org_id UUID,
+        status TEXT NOT NULL DEFAULT 'running',
+        delivery_option TEXT,
+        budget_json JSONB NOT NULL DEFAULT '{}',
+        prompt_version_set JSONB NOT NULL DEFAULT '{}',
+        input_brief_encrypted TEXT,
+        input_brief_is_encrypted BOOLEAN DEFAULT TRUE,
+        total_cost_usd NUMERIC(10, 6) DEFAULT 0,
+        total_tokens INTEGER DEFAULT 0,
+        error_message TEXT,
+        started_at TIMESTAMPTZ DEFAULT NOW(),
+        completed_at TIMESTAMPTZ
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_pipeline_runs_user ON pipeline_runs(user_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_pipeline_runs_org ON pipeline_runs(org_id) WHERE org_id IS NOT NULL`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_pipeline_runs_status ON pipeline_runs(status)`);
+
+    // ─── Orchestrator: artifacts produced by agent steps ──────────────
+    // Payload encrypted at rest; embedding stored unencrypted for similarity
+    // search (semantic-only, not literal-text leakage). quality_score +
+    // rubric_id come from the F4 evaluator after a gate runs.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS run_artifacts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        run_id UUID NOT NULL,
+        step_id UUID,
+        org_id UUID,
+        artifact_type TEXT NOT NULL,
+        title TEXT,
+        payload_encrypted TEXT NOT NULL,
+        is_encrypted BOOLEAN DEFAULT TRUE,
+        embedding vector(1536),
+        quality_score REAL,
+        rubric_id TEXT,
+        evaluator_id TEXT,
+        confidence_level TEXT,
+        confidence_reason TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_run_artifacts_run ON run_artifacts(run_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_run_artifacts_org ON run_artifacts(org_id) WHERE org_id IS NOT NULL`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_run_artifacts_type ON run_artifacts(artifact_type)`);
+    try {
+      await client.query(
+        `CREATE INDEX IF NOT EXISTS idx_run_artifacts_embedding ON run_artifacts USING hnsw (embedding vector_cosine_ops)`
+      );
+    } catch { /* pgvector hnsw not available */ }
+
+    // ─── Orchestrator: gate decisions per phase ───────────────────────
+    // GateResult shape matches F6's GateResultSchema.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS gate_results (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        run_id UUID NOT NULL,
+        step_id UUID,
+        gate_id TEXT NOT NULL,
+        phase TEXT NOT NULL,
+        passed BOOLEAN NOT NULL,
+        requires_human_review BOOLEAN NOT NULL DEFAULT FALSE,
+        confidence_level TEXT NOT NULL,
+        confidence_reason TEXT,
+        checks_json JSONB NOT NULL DEFAULT '[]',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_gate_results_run ON gate_results(run_id)`);
+
+    // ─── Orchestrator: tool invocations ───────────────────────────────
+    // input/output stored encrypted (may carry sensitive data).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS tool_calls (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        run_id UUID NOT NULL,
+        step_id UUID,
+        agent_id TEXT NOT NULL,
+        tool_name TEXT NOT NULL,
+        input_encrypted TEXT,
+        output_encrypted TEXT,
+        is_encrypted BOOLEAN DEFAULT TRUE,
+        duration_ms INTEGER,
+        cost_usd NUMERIC(10, 6) DEFAULT 0,
+        error_message TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_tool_calls_run ON tool_calls(run_id)`);
+
+    // ─── Orchestrator: routing decisions (audit trail) ────────────────
+    // AgentDecision shape matches F6's AgentDecisionSchema. question / decision /
+    // reasoning may quote user content; encrypted at rest.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS agent_decisions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        run_id UUID NOT NULL,
+        question_encrypted TEXT NOT NULL,
+        decision_encrypted TEXT NOT NULL,
+        reasoning_encrypted TEXT NOT NULL,
+        is_encrypted BOOLEAN DEFAULT TRUE,
+        confidence_level TEXT NOT NULL,
+        confidence_reason_encrypted TEXT,
+        reversible BOOLEAN NOT NULL DEFAULT TRUE,
+        decided_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_agent_decisions_run ON agent_decisions(run_id)`);
 
     await client.query("COMMIT");
     console.log("Database migration complete — all tables initialized");
