@@ -2,20 +2,29 @@ import { fetch } from "expo/fetch";
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 /**
- * Gets the base URL for the Express API server (e.g., "http://localhost:3000")
- * @returns {string} The API base URL
+ * Resolve the Express API base URL. Resolution order:
+ *   1. EXPO_PUBLIC_API_URL — full URL incl. scheme + port. Set this for
+ *      local dev: EXPO_PUBLIC_API_URL=http://localhost:5000
+ *   2. EXPO_PUBLIC_DOMAIN — bare host or full URL. Used for prod / static
+ *      deploys where the API is served over HTTPS at a known domain.
+ *   3. http://localhost:5000 — matches the PORT in .env.example.
+ *
+ * The Express server defaults to PORT 3000 when no env is set, but the
+ * project's .env pins PORT=5000 — historically a Replit convention that
+ * survived the F1 provider abstraction. The fallback here matches the
+ * actual configured port, not the server's stale default.
  */
 export function getApiUrl(): string {
-  let host = process.env.EXPO_PUBLIC_DOMAIN;
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (apiUrl) return apiUrl.endsWith("/") ? apiUrl : apiUrl + "/";
 
-  if (!host) {
-    // Local development fallback
-    return "http://localhost:3000";
+  const host = process.env.EXPO_PUBLIC_DOMAIN;
+  if (host) {
+    const withScheme = /^https?:\/\//i.test(host) ? host : `https://${host}`;
+    return new URL(withScheme).href;
   }
 
-  let url = new URL(`https://${host}`);
-
-  return url.href;
+  return "http://localhost:5000/";
 }
 
 async function throwIfResNotOk(res: Response) {

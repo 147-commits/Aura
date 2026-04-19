@@ -1889,7 +1889,18 @@ export default function ChatScreen() {
         });
       }
 
-      if (!response.ok) throw new Error("Request failed");
+      if (!response.ok) {
+        const body = await response.text().catch(() => "");
+        const err = new Error(`HTTP ${response.status}`) as Error & {
+          status?: number;
+          url?: string;
+          body?: string;
+        };
+        err.status = response.status;
+        err.url = url.toString();
+        err.body = body.slice(0, 500);
+        throw err;
+      }
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error("No body");
@@ -2050,11 +2061,31 @@ export default function ChatScreen() {
 
       inputRef.current?.focus();
     } catch (err) {
-      console.error("Send error:", err);
+      const e = err as Error & { status?: number; url?: string; body?: string };
+      const status = e.status;
+      const reqUrl = e.url ?? new URL("/api/chat", getApiUrl()).toString();
+      let bubble: string;
+      if (status === undefined) {
+        // No HTTP status → network error (server unreachable, CORS, DNS).
+        console.error("[chat] network error", { url: reqUrl, error: e.message });
+        bubble = "\u21BB Server unreachable \u2014 check the server is running";
+      } else if (status === 401) {
+        console.error("[chat] auth failed", { url: reqUrl, deviceId, body: e.body });
+        bubble = "\u21BB Auth failed \u2014 try clearing app data";
+      } else if (status === 404) {
+        console.error("[chat] route not found", { url: reqUrl });
+        bubble = "\u21BB Route not found \u2014 server may be on the wrong version";
+      } else if (status >= 500) {
+        console.error("[chat] server error", { url: reqUrl, status, body: e.body });
+        bubble = `\u21BB Server error (${status}) \u2014 tap to retry`;
+      } else {
+        console.error("[chat] bad request", { url: reqUrl, status, body: e.body });
+        bubble = `\u21BB Bad request (${status}) \u2014 tap to retry`;
+      }
       const errMsg: Message = {
         id: generateId(),
         role: "assistant",
-        content: "\u21BB Connection issue \u2014 tap to retry",
+        content: bubble,
         type: "text",
         mode: "chat",
         timestamp: Date.now(),
