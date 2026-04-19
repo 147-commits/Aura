@@ -8,6 +8,7 @@ import { View, Text, StyleSheet, Animated as RNAnimated, Platform } from "react-
 import { Ionicons } from "@expo/vector-icons";
 import AnimatedRN, { FadeIn, FadeInRight, FadeOut } from "react-native-reanimated";
 import Colors from "@/constants/colors";
+import { SpinnerMorph } from "@/components/SpinnerMorph";
 
 const C = Colors.dark;
 
@@ -33,8 +34,10 @@ export function ThinkingIndicator({ step, message, sources }: ThinkingIndicatorP
 
   return (
     <View style={styles.container}>
+      {/* SpinnerMorph occupies the avatar slot during loading — same size,
+          same border radius, brand color. Communicates "Aura is working". */}
       <View style={styles.avatarSmall}>
-        <Text style={styles.avatarA}>A</Text>
+        <SpinnerMorph size={18} fill={C.accent} bg="transparent" rotateDur="3s" />
       </View>
       <View style={styles.content}>
         <AnimatedRN.View entering={FadeIn.duration(200)} key={step} style={styles.stepRow}>
