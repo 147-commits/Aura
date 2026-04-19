@@ -1,9 +1,11 @@
 import "dotenv/config";
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
+import { createServer } from "node:http";
+import { buildRouter } from "./routes";
 import { initDatabase } from "./migration";
 import { authMiddleware, generalRateLimit } from "./middleware";
+import { selectProvider } from "./providers/provider-registry";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -20,13 +22,15 @@ function setupCors(app: express.Application) {
   app.use((req, res, next) => {
     const origins = new Set<string>();
 
-    if (process.env.REPLIT_DEV_DOMAIN) {
-      origins.add(`https://${process.env.REPLIT_DEV_DOMAIN}`);
-    }
-
-    if (process.env.REPLIT_DOMAINS) {
-      process.env.REPLIT_DOMAINS.split(",").forEach((d) => {
-        origins.add(`https://${d.trim()}`);
+    // CORS_ORIGINS: comma-separated list of allowed origins.
+    // Each entry may be a full origin (https://app.example.com) or a bare
+    // host (app.example.com); bare hosts are normalized to https://.
+    if (process.env.CORS_ORIGINS) {
+      process.env.CORS_ORIGINS.split(",").forEach((raw: string) => {
+        const trimmed = raw.trim();
+        if (!trimmed) return;
+        const normalized = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+        origins.add(normalized);
       });
     }
 
@@ -208,9 +212,15 @@ function setupErrorHandler(app: express.Application) {
 
   // ─── Database ────────────────────────────────────────────────────────
   await initDatabase();
+  log("Connected to Postgres");
+
+  // ─── Provider Registry ───────────────────────────────────────────────
+  // Warm the default provider so routing logs appear at boot.
+  selectProvider("mini");
 
   // ─── Routes ──────────────────────────────────────────────────────────
-  const server = await registerRoutes(app);
+  app.use(buildRouter());
+  const server = createServer(app);
 
   setupErrorHandler(app);
 

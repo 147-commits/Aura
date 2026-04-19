@@ -1,31 +1,37 @@
 /**
- * AI Provider — unified interface for OpenAI and Anthropic (Claude).
+ * AI Provider — public façade over the provider registry.
+ *
+ * Thin shim that delegates to ./providers/* so the rest of the server
+ * (routes, embedding-engine, memory-consolidator, etc.) keeps its existing
+ * import surface unchanged while the underlying provider stack is portable
+ * to any host.
  *
  * Strategy:
- *   - Claude Sonnet → skill responses (less hallucination, better structured prompts)
- *   - GPT-4o-mini  → routing, classification, background tasks (cheap, fast)
- *   - GPT-4o       → research, complex non-skill queries (fallback standard)
+ *   - Claude / "skill" tier  → Anthropic when ANTHROPIC_API_KEY is present
+ *   - GPT-4o / "standard"    → OpenAI
+ *   - GPT-4o-mini / "mini"   → OpenAI
  *
- * Both providers expose the same streaming interface so routes.ts
- * doesn't need to know which model is answering.
+ * See server/providers/provider-registry.ts for routing.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
-import OpenAI from "openai";
+import type Anthropic from "@anthropic-ai/sdk";
+import type OpenAI from "openai";
+import { selectProvider, getOpenAIProviderInstance } from "./providers/provider-registry";
+import type { ChatMessage as ProviderChatMessage } from "./providers/ai-provider-interface";
 
-// ── Provider Types ──────────────────────────────────────────────────────────
+// ── Public Types (re-exported / stable) ──────────────────────────────────────
 
 export type Provider = "openai" | "anthropic";
-
-export interface ChatMessage {
-  role: "system" | "user" | "assistant";
-  content: string | ContentPart[];
-}
 
 export interface ContentPart {
   type: "text" | "image_url";
   text?: string;
   image_url?: { url: string };
+}
+
+export interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: string | ContentPart[];
 }
 
 export interface StreamChunk {
@@ -45,32 +51,6 @@ export interface NonStreamingOptions {
   maxTokens: number;
 }
 
-// ── Client Instances ────────────────────────────────────────────────────────
-
-let openaiClient: OpenAI | null = null;
-let anthropicClient: Anthropic | null = null;
-
-/** Get or create the OpenAI client */
-export function getOpenAI(): OpenAI {
-  if (!openaiClient) {
-    openaiClient = new OpenAI({
-      apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-      baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-    });
-  }
-  return openaiClient;
-}
-
-/** Get or create the Anthropic client */
-export function getAnthropic(): Anthropic {
-  if (!anthropicClient) {
-    anthropicClient = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    });
-  }
-  return anthropicClient;
-}
-
 // ── Model Registry ──────────────────────────────────────────────────────────
 
 export const PROVIDER_MODELS = {
@@ -84,11 +64,64 @@ export const PROVIDER_MODELS = {
 
 export type ModelId = keyof typeof PROVIDER_MODELS;
 
-// ── Streaming Interface ─────────────────────────────────────────────────────
+// ── SDK Accessors (back-compat) ─────────────────────────────────────────────
 
 /**
- * Create a streaming completion using the appropriate provider.
- * Returns an async iterable of content chunks — same interface regardless of provider.
+ * Return the underlying OpenAI SDK client.
+ *
+ * Used by callers that need OpenAI-specific features (Responses API with
+ * web_search_preview, embeddings, image edits, etc.) and can't go through
+ * the provider-neutral interface.
+ */
+export function getOpenAI(): OpenAI {
+  return getOpenAIProviderInstance().raw();
+}
+
+/**
+ * Return the underlying Anthropic SDK client.
+ * Throws if ANTHROPIC_API_KEY is not set — callers should be tier-routed.
+ */
+export function getAnthropic(): Anthropic {
+  const provider = selectProvider("skill");
+  if (provider.id !== "anthropic") {
+    throw new Error("Anthropic provider not available — ANTHROPIC_API_KEY is not set");
+  }
+  // The skill provider is AnthropicProvider when env is configured.
+  return (provider as unknown as { raw: () => Anthropic }).raw();
+}
+
+// ── Streaming + Completion ──────────────────────────────────────────────────
+
+function tierForModelId(modelId: ModelId): "skill" | "standard" | "mini" {
+  const config = PROVIDER_MODELS[modelId];
+  if (config.provider === "anthropic") return "skill";
+  if (config.model === "gpt-4o-mini") return "mini";
+  return "standard";
+}
+
+function toProviderMessages(messages: ChatMessage[]): ProviderChatMessage[] {
+  return messages.map((m) => {
+    if (typeof m.content === "string") {
+      return { role: m.role, content: m.content };
+    }
+    return {
+      role: m.role,
+      content: m.content.map((p) => {
+        if (p.type === "text") {
+          return { type: "text" as const, text: p.text ?? "" };
+        }
+        return {
+          type: "image_url" as const,
+          image_url: { url: p.image_url?.url ?? "" },
+        };
+      }),
+    };
+  });
+}
+
+/**
+ * Stream a completion from the appropriate provider.
+ * Returns an async iterable of content chunks — provider-neutral.
  */
 export async function* createStream(
   modelId: ModelId,
@@ -97,16 +130,19 @@ export async function* createStream(
 ): AsyncGenerator<StreamChunk> {
   const config = PROVIDER_MODELS[modelId];
   const tokens = maxTokens ?? config.maxTokens;
-
-  if (config.provider === "anthropic") {
-    yield* streamAnthropic(config.model, messages, tokens);
-  } else {
-    yield* streamOpenAI(config.model, messages, tokens);
+  const provider = selectProvider(tierForModelId(modelId));
+  const stream = provider.stream({
+    model: config.model,
+    messages: toProviderMessages(messages),
+    maxTokens: tokens,
+  });
+  for await (const chunk of stream) {
+    if (chunk.content) yield { content: chunk.content };
   }
 }
 
 /**
- * Create a non-streaming completion. Returns the full response text.
+ * Non-streaming completion. Returns the full response text.
  * Used for background tasks (memory extraction, mode detection, etc.)
  */
 export async function createCompletion(
@@ -116,132 +152,11 @@ export async function createCompletion(
 ): Promise<string> {
   const config = PROVIDER_MODELS[modelId];
   const tokens = maxTokens ?? config.maxTokens;
-
-  if (config.provider === "anthropic") {
-    return completeAnthropic(config.model, messages, tokens);
-  } else {
-    return completeOpenAI(config.model, messages, tokens);
-  }
-}
-
-// ── OpenAI Implementation ───────────────────────────────────────────────────
-
-async function* streamOpenAI(
-  model: string,
-  messages: ChatMessage[],
-  maxTokens: number
-): AsyncGenerator<StreamChunk> {
-  const client = getOpenAI();
-  const stream = await client.chat.completions.create({
-    model,
-    messages: messages as OpenAI.ChatCompletionMessageParam[],
-    stream: true,
-    max_completion_tokens: maxTokens,
+  const provider = selectProvider(tierForModelId(modelId));
+  const response = await provider.chat({
+    model: config.model,
+    messages: toProviderMessages(messages),
+    maxTokens: tokens,
   });
-
-  for await (const chunk of stream) {
-    const content = chunk.choices[0]?.delta?.content || "";
-    if (content) {
-      yield { content };
-    }
-  }
-}
-
-async function completeOpenAI(
-  model: string,
-  messages: ChatMessage[],
-  maxTokens: number
-): Promise<string> {
-  const client = getOpenAI();
-  const response = await client.chat.completions.create({
-    model,
-    messages: messages as OpenAI.ChatCompletionMessageParam[],
-    max_completion_tokens: maxTokens,
-  });
-  return response.choices[0]?.message?.content?.trim() || "";
-}
-
-// ── Anthropic Implementation ────────────────────────────────────────────────
-
-/**
- * Convert ChatMessage[] to Anthropic's format.
- * Anthropic requires system prompt as a separate parameter, not in messages array.
- */
-function toAnthropicFormat(messages: ChatMessage[]): {
-  system: string;
-  messages: Anthropic.MessageParam[];
-} {
-  let system = "";
-  const anthropicMessages: Anthropic.MessageParam[] = [];
-
-  for (const msg of messages) {
-    if (msg.role === "system") {
-      // Anthropic takes system as a separate param
-      system += (system ? "\n\n" : "") + extractText(msg.content);
-    } else {
-      anthropicMessages.push({
-        role: msg.role as "user" | "assistant",
-        content: extractText(msg.content),
-      });
-    }
-  }
-
-  // Anthropic requires at least one user message
-  if (anthropicMessages.length === 0) {
-    anthropicMessages.push({ role: "user", content: "Hello" });
-  }
-
-  return { system, messages: anthropicMessages };
-}
-
-function extractText(content: string | ContentPart[]): string {
-  if (typeof content === "string") return content;
-  return content
-    .filter((p) => p.type === "text" && p.text)
-    .map((p) => p.text!)
-    .join("\n");
-}
-
-async function* streamAnthropic(
-  model: string,
-  messages: ChatMessage[],
-  maxTokens: number
-): AsyncGenerator<StreamChunk> {
-  const client = getAnthropic();
-  const { system, messages: anthropicMessages } = toAnthropicFormat(messages);
-
-  const stream = client.messages.stream({
-    model,
-    system: system || undefined,
-    messages: anthropicMessages,
-    max_tokens: maxTokens,
-  });
-
-  for await (const event of stream) {
-    if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-      yield { content: event.delta.text };
-    }
-  }
-}
-
-async function completeAnthropic(
-  model: string,
-  messages: ChatMessage[],
-  maxTokens: number
-): Promise<string> {
-  const client = getAnthropic();
-  const { system, messages: anthropicMessages } = toAnthropicFormat(messages);
-
-  const response = await client.messages.create({
-    model,
-    system: system || undefined,
-    messages: anthropicMessages,
-    max_tokens: maxTokens,
-  });
-
-  return response.content
-    .filter((block): block is Anthropic.TextBlock => block.type === "text")
-    .map((block) => block.text)
-    .join("")
-    .trim();
+  return response.content.trim();
 }

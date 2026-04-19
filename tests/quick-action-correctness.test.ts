@@ -5,7 +5,7 @@
  * produces the correct type of response when used via the /api/chat endpoint.
  */
 
-const BASE_URL = `https://${process.env.REPLIT_DEV_DOMAIN}:5000`;
+const BASE_URL = process.env.AURA_TEST_BASE_URL || "http://127.0.0.1:5000";
 const DEVICE_ID = "test-quick-action-" + Date.now().toString(36);
 
 let passed = 0;
