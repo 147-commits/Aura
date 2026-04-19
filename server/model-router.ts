@@ -56,7 +56,7 @@ const MONTHLY_COST_WARN_THRESHOLD = 50;
 const TIER_TO_MODEL: Record<ModelTier, { modelId: ModelId; model: string; maxTokens: number }> = {
   mini: { modelId: "gpt-4o-mini", model: "gpt-4o-mini", maxTokens: 4096 },
   standard: { modelId: "gpt-4o", model: "gpt-4o", maxTokens: 4096 },
-  skill: { modelId: "claude-sonnet", model: "claude-sonnet-4-20250514", maxTokens: 4096 },
+  skill: { modelId: "claude-sonnet", model: "claude-sonnet-4-6", maxTokens: 4096 },
 };
 
 // ── Monthly Cost Tracking ───────────────────────────────────────────────────

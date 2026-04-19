@@ -1930,6 +1930,15 @@ export default function ChatScreen() {
           if (data === "[DONE]") break;
           try {
             const parsed = JSON.parse(data);
+            if (parsed.type === "stream_error") {
+              const err = new Error(`Model stream failed: ${parsed.message || "unknown"}`) as Error & {
+                status?: number; url?: string; body?: string;
+              };
+              err.status = parsed.status ?? 502;
+              err.url = url.toString();
+              err.body = `model=${parsed.model} tier=${parsed.tier}`;
+              throw err;
+            }
             if (parsed.type === "memory_saved" && parsed.memories?.length > 0) {
               setSavedMemory({ text: parsed.memories[0].text, category: parsed.memories[0].category });
             } else if (parsed.type === "status") {

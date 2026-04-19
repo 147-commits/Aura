@@ -21,7 +21,7 @@ export const openai = getOpenAI();
 export const COST_PER_1M_INPUT: Record<string, number> = {
   "gpt-4o-mini": 0.15,
   "gpt-4o": 1.0,
-  "claude-sonnet-4-20250514": 3.0,
+  "claude-sonnet-4-6": 3.0,
 };
 
 export function perfLog(data: Record<string, unknown>): void {

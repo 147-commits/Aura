@@ -274,15 +274,38 @@ export async function handleChatStream(req: Request, res: Response): Promise<voi
 
     let fullContent = "";
     let actionMarkerDetected = false;
-    for await (const chunk of stream) {
-      const content = chunk.content;
-      if (content) {
-        fullContent += content;
-        if (fullContent.includes("|||ACTION_ITEMS|||") || fullContent.includes("|||CRAFT_REQUEST|||")) actionMarkerDetected = true;
-        if (!actionMarkerDetected) {
-          res.write(`data: ${JSON.stringify({ content })}\n\n`);
+    try {
+      for await (const chunk of stream) {
+        const content = chunk.content;
+        if (content) {
+          fullContent += content;
+          if (fullContent.includes("|||ACTION_ITEMS|||") || fullContent.includes("|||CRAFT_REQUEST|||")) actionMarkerDetected = true;
+          if (!actionMarkerDetected) {
+            res.write(`data: ${JSON.stringify({ content })}\n\n`);
+          }
         }
       }
+    } catch (streamErr: any) {
+      // The model call failed mid-stream (bad model name, rate limit, key
+      // expired, etc.). Surface a structured error event to the client
+      // instead of silently writing [DONE] — the previous behavior left
+      // users staring at an empty assistant bubble with no diagnosis.
+      const status = streamErr?.status ?? streamErr?.response?.status;
+      const detail = streamErr?.error?.error?.message ?? streamErr?.message ?? String(streamErr);
+      console.error(
+        `[chat] model stream failed (model=${modelConfig.model}, tier=${modelConfig.tier}, status=${status}):`,
+        detail
+      );
+      res.write(`data: ${JSON.stringify({
+        type: "stream_error",
+        model: modelConfig.model,
+        tier: modelConfig.tier,
+        status: status ?? null,
+        message: detail,
+      })}\n\n`);
+      res.write("data: [DONE]\n\n");
+      res.end();
+      return;
     }
 
     const { cleanContent: preActionContent, actionItems } = parseActionItems(fullContent);

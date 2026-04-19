@@ -55,7 +55,7 @@ export interface NonStreamingOptions {
 
 export const PROVIDER_MODELS = {
   /** Claude Sonnet — skill responses, structured reasoning */
-  "claude-sonnet": { provider: "anthropic" as Provider, model: "claude-sonnet-4-20250514", maxTokens: 4096 },
+  "claude-sonnet": { provider: "anthropic" as Provider, model: "claude-sonnet-4-6", maxTokens: 4096 },
   /** GPT-4o — research, complex non-skill queries */
   "gpt-4o": { provider: "openai" as Provider, model: "gpt-4o", maxTokens: 4096 },
   /** GPT-4o-mini — routing, background, cheap tasks */
