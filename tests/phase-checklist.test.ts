@@ -182,11 +182,14 @@ await phase("CROSS-PHASE: AURA_CORE integrity", () => {
     assert(prompt.includes("Confidence: High|Medium|Low"), `[ ] ${id}: confidence required`);
   }
 
-  // Skill counts
-  assert(AGENT_REGISTRY.size === 26, "[ ] 26 skills registered");
-  assert(getAgentsByDomain("engineering").length === 5, "[ ] 5 engineering skills");
-  assert(getAgentsByDomain("marketing").length === 4, "[ ] 4 marketing skills");
-  assert(getAgentsByDomain("finance").length === 3, "[ ] 3 finance skills");
+  // Roster counts (post-C1: 26 advisors + 12 pipeline = 38)
+  assert(AGENT_REGISTRY.size === 38, "[ ] 38 agents registered (26 advisors + 12 pipeline)");
+  // Engineering domain: 5 advisors + 5 pipeline (cto, eng-lead, qa-lead, architect, fullstack-eng) = 10
+  assert(getAgentsByDomain("engineering").length === 10, "[ ] 10 engineering agents");
+  // Marketing domain unchanged (no marketing pipeline agents): 4
+  assert(getAgentsByDomain("marketing").length === 4, "[ ] 4 marketing agents");
+  // Finance domain unchanged: 3
+  assert(getAgentsByDomain("finance").length === 3, "[ ] 3 finance agents");
 });
 
 // ─── Summary ────────────────────────────────────────────────────────────────

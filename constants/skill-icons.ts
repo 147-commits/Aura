@@ -35,6 +35,19 @@ export const SKILL_ICONS: Record<string, IconName> = {
   "curriculum-designer": "school-outline",
   "tutoring-expert": "bulb-outline",
   "wellness-coach": "heart-outline",
+  // ── Pipeline agents (C1) ──
+  "ceo": "trophy-outline",
+  "cto": "hardware-chip-outline",
+  "cpo": "cube-outline",
+  "coo": "settings-outline",
+  "ciso": "shield-checkmark-outline",
+  "eng-lead": "git-branch-outline",
+  "qa-lead": "checkmark-done-outline",
+  "design-lead": "color-palette-outline",
+  "devops-lead": "cloud-upload-outline",
+  "architect": "grid-outline",
+  "fullstack-eng": "layers-outline",
+  "tech-writer": "pencil-outline",
 };
 
 export const DOMAIN_ICONS: Record<string, IconName> = {
@@ -47,4 +60,8 @@ export const DOMAIN_ICONS: Record<string, IconName> = {
   legal: "shield-checkmark-outline",
   education: "school-outline",
   health: "heart-outline",
+  // ── New domains introduced by pipeline agents (C1) ──
+  security: "shield-checkmark-outline",
+  design: "color-palette-outline",
+  support: "pencil-outline",
 };

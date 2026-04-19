@@ -202,16 +202,18 @@ async function runAllFlows() {
     assert("leadership" in body, "Has leadership domain");
     assert("operations" in body, "Has operations domain");
 
-    assert(body.engineering.length === 5, `Engineering: 5 skills (got ${body.engineering.length})`);
-    assert(body.marketing.length === 4, `Marketing: 4 skills (got ${body.marketing.length})`);
-    assert(body.product.length === 3, `Product: 3 skills (got ${body.product.length})`);
-    assert(body.finance.length === 3, `Finance: 3 skills (got ${body.finance.length})`);
-    assert(body.leadership.length === 3, `Leadership: 3 skills (got ${body.leadership.length})`);
-    assert(body.operations.length === 3, `Operations: 3 skills (got ${body.operations.length})`);
+    // Post-C1: pipeline agents added across engineering/product/leadership/operations.
+    assert(body.engineering.length === 10, `Engineering: 10 agents (got ${body.engineering.length})`);
+    assert(body.marketing.length === 4, `Marketing: 4 agents (got ${body.marketing.length})`);
+    assert(body.product.length === 4, `Product: 4 agents (got ${body.product.length})`);
+    assert(body.finance.length === 3, `Finance: 3 agents (got ${body.finance.length})`);
+    assert(body.leadership.length === 4, `Leadership: 4 agents (got ${body.leadership.length})`);
+    assert(body.operations.length === 5, `Operations: 5 agents (got ${body.operations.length})`);
 
-    // Total across all domains
+    // Total across the 9 advisor domains the test's mock /api/skills exposes.
+    // 26 advisors + 9 pipeline agents whose domain falls in the advisor 9.
     const total = Object.values(body).reduce((sum: number, arr: any) => sum + arr.length, 0);
-    assert(total === 26, `Total: 26 skills (got ${total})`);
+    assert(total === 35, `Total across exposed advisor domains: 35 (got ${total})`);
   });
 
   await flow("SUPERTEST — GET /api/skills skill structure (no secrets)", async () => {
@@ -393,7 +395,7 @@ async function runAllFlows() {
 
     // Valid IDs listed
     const validIds = getAllSkillIds();
-    assert(validIds.length === 26, "26 valid IDs available");
+    assert(validIds.length === 38, "38 valid IDs available (26 advisors + 12 pipeline)");
 
     // Malicious systemPrompt blocked
     const evil = {

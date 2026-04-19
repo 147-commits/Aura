@@ -362,6 +362,101 @@ export const DOMAIN_CONFIDENCE_RULES: Record<AdvisorDomain, ConfidenceRules> = {
       "stop taking your medication",
     ],
   },
+
+  // ── Pipeline-only domains (added in C1) ────────────────────────────────
+  security: {
+    domain: "security",
+    highAllowedWhen: [
+      "Documented vulnerabilities (CVE, OWASP Top 10 entries)",
+      "Concrete control failures observable in code or config (hardcoded secrets, missing auth)",
+      "Standards alignment statements (ASVS, NIST CSF, STRIDE coverage matrix)",
+    ],
+    highForbiddenFor: [
+      "Comprehensive security claims ('this is secure', 'fully audited')",
+      "Predictions about novel attack vectors or zero-days",
+      "Effectiveness of mitigations not yet exercised by red-team or pentest",
+    ],
+    mediumDefaultFor: [
+      "Threats whose exploitability depends on attacker capability assumptions",
+      "Risks tied to deployment environment specifics not yet observed",
+      "Mitigations whose effectiveness depends on operational discipline",
+    ],
+    lowRequiredFor: [
+      "Any 'fully secure' or 'no remaining attack surface' framing",
+      "Claims about future attacker behavior or industry-wide threat trends",
+      "Effectiveness of layered controls without demonstrated defense-in-depth testing",
+    ],
+    alwaysStateAssumptions: true,
+    neverClaimFor: [
+      "fully secure",
+      "no attack surface",
+      "unhackable",
+      "zero risk",
+      "guaranteed safe",
+    ],
+  },
+  design: {
+    domain: "design",
+    highAllowedWhen: [
+      "WCAG 2.2 AA conformance backed by contrast checks + keyboard testing",
+      "Component reuse from documented design-system primitives",
+      "Interaction states defined per the 7-state checklist (default/hover/active/disabled/loading/error/empty)",
+    ],
+    highForbiddenFor: [
+      "Predictions about subjective user preference or aesthetic appeal",
+      "Conversion-rate impact of visual choices without A/B evidence",
+      "Animation feel claims without prototype testing",
+    ],
+    mediumDefaultFor: [
+      "Novel interaction patterns where user behavior must be observed",
+      "Layout decisions that depend on real content lengths not yet available",
+      "Accessibility judgments at the AAA tier without specialist review",
+    ],
+    lowRequiredFor: [
+      "Predictions about emotional response or brand perception",
+      "Specific engagement-metric impact estimates from visual changes",
+      "Cross-cultural copy resonance without localization testing",
+    ],
+    alwaysStateAssumptions: false,
+    neverClaimFor: [
+      "delightful",
+      "seamless",
+      "intuitive",
+      "users will love",
+      "world-class design",
+    ],
+  },
+  support: {
+    domain: "support",
+    highAllowedWhen: [
+      "Documentation that traces to code that was actually read",
+      "Tutorials whose steps were verified end-to-end from a fresh environment",
+      "Reference docs aligned with the public API surface",
+    ],
+    highForbiddenFor: [
+      "Predictions about user comprehension without testing on a beginner",
+      "Claims about future API stability or backward compatibility timeframes",
+      "Statements about coverage completeness without an audit pass",
+    ],
+    mediumDefaultFor: [
+      "Reference for novel surfaces where edge cases aren't yet observed in real usage",
+      "Troubleshooting entries based on small numbers of reported incidents",
+      "Migration guides whose steps haven't been run by a real user yet",
+    ],
+    lowRequiredFor: [
+      "Predictions about how a beginner will interpret the docs",
+      "Claims about the doc reducing support load by a specific percentage",
+      "Future-doc-stability promises during pre-1.0 development",
+    ],
+    alwaysStateAssumptions: false,
+    neverClaimFor: [
+      "delightful",
+      "powerful",
+      "world-class",
+      "the only resource you need",
+      "comprehensive guide to everything",
+    ],
+  },
 };
 
 // ── Calibration Instruction Builder ─────────────────────────────────────────

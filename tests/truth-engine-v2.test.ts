@@ -279,10 +279,10 @@ describe("Domain calibrator still applies ON TOP of composite scoring", () => {
     assert(final === "Low", "Marketing viral: domain downgrades Medium → Low");
   }
 
-  // All 9 domain calibrators still have their rules
+  // C1 widened the calibrator with security/design/support → 12 domain calibrators
   {
     const domains = Object.keys(DOMAIN_CONFIDENCE_RULES);
-    assert(domains.length === 9, `9 domain calibrators exist (got ${domains.length})`);
+    assert(domains.length === 12, `12 domain calibrators exist (got ${domains.length})`);
     for (const domain of domains) {
       const rules = DOMAIN_CONFIDENCE_RULES[domain as keyof typeof DOMAIN_CONFIDENCE_RULES];
       assert(rules.highAllowedWhen.length >= 3, `${domain}: has highAllowed rules`);

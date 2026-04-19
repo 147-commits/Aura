@@ -42,7 +42,7 @@ export type PipelinePhase =
 /** Model routing tier. */
 export type ModelTier = "mini" | "standard" | "skill" | "frontier";
 
-/** Narrower subset of AgentDomain that currently has confidence rules. */
+/** Subset of AgentDomain that currently has registered confidence rules. */
 export type AdvisorDomain =
   | "engineering"
   | "marketing"
@@ -52,7 +52,10 @@ export type AdvisorDomain =
   | "operations"
   | "legal"
   | "education"
-  | "health";
+  | "health"
+  | "security"
+  | "design"
+  | "support";
 
 /** Domain-specific confidence rules for the calibrator. */
 export interface AgentConfidenceRules {

@@ -37,8 +37,8 @@ function assert(condition: boolean, label: string) {
 
 console.log("\n=== Agent Registry — F3 acceptance ===\n");
 
-// 1. Registry size
-assert(AGENT_REGISTRY.size === 26, `registry.size === 26 (got ${AGENT_REGISTRY.size})`);
+// 1. Registry size — 26 advisors + 12 pipeline agents = 38 (post-C1)
+assert(AGENT_REGISTRY.size === 38, `registry.size === 38 (got ${AGENT_REGISTRY.size})`);
 
 // 2. Every agent has a non-empty systemPrompt
 let allHavePrompts = true;
@@ -59,24 +59,38 @@ for (const [id, agent] of AGENT_REGISTRY) {
 }
 assert(unresolved.length === 0, `every chainsWith resolves (unresolved: ${unresolved.join(", ") || "none"})`);
 
-// 4. getAgentsForPhase("discovery") returns 0 until pipeline agents are added
-assert(getAgentsForPhase("discovery").length === 0, "no agents registered for 'discovery' phase yet");
-assert(getAgentsForPhase("design").length === 0, "no agents registered for 'design' phase yet");
-assert(getAgentsForPhase("planning").length === 0, "no agents registered for 'planning' phase yet");
-assert(getAgentsForPhase("implementation").length === 0, "no agents registered for 'implementation' phase yet");
-assert(getAgentsForPhase("verification").length === 0, "no agents registered for 'verification' phase yet");
+// 4. Pipeline phases populated after C1
+assert(getAgentsForPhase("discovery").length >= 2, `≥2 agents for 'discovery' (got ${getAgentsForPhase("discovery").length})`);
+assert(getAgentsForPhase("design").length >= 2, `≥2 agents for 'design' (got ${getAgentsForPhase("design").length})`);
+assert(getAgentsForPhase("planning").length >= 2, `≥2 agents for 'planning' (got ${getAgentsForPhase("planning").length})`);
+assert(getAgentsForPhase("implementation").length >= 2, `≥2 agents for 'implementation' (got ${getAgentsForPhase("implementation").length})`);
+assert(getAgentsForPhase("verification").length >= 2, `≥2 agents for 'verification' (got ${getAgentsForPhase("verification").length})`);
+assert(getAgentsForPhase("release").length >= 1, `≥1 agent for 'release' (got ${getAgentsForPhase("release").length})`);
+assert(getAgentsForPhase("gtm").length >= 1, `≥1 agent for 'gtm' (got ${getAgentsForPhase("gtm").length})`);
 
-// 5. Every current agent is at the "advisor" layer
+// 5. Layer roster: 5 executives + 4 leads + 3 specialists + 26 advisors
 const advisors = getAgentsByLayer("advisor");
 assert(advisors.length === 26, `26 advisor-layer agents (got ${advisors.length})`);
-assert(getAgentsByLayer("executive").length === 0, "no executive-layer agents yet");
-assert(getAgentsByLayer("lead").length === 0, "no lead-layer agents yet");
-assert(getAgentsByLayer("specialist").length === 0, "no specialist-layer agents yet");
+assert(getAgentsByLayer("executive").length === 5, `5 executive-layer agents (got ${getAgentsByLayer("executive").length})`);
+assert(getAgentsByLayer("lead").length === 4, `4 lead-layer agents (got ${getAgentsByLayer("lead").length})`);
+assert(getAgentsByLayer("specialist").length === 3, `3 specialist-layer agents (got ${getAgentsByLayer("specialist").length})`);
+
+// 5b. Pipeline-prompt content audit
+const PIPELINE_IDS = ["ceo","cto","cpo","coo","ciso","eng-lead","qa-lead","design-lead","devops-lead","architect","fullstack-eng","tech-writer"];
+for (const id of PIPELINE_IDS) {
+  const a = getAgent(id);
+  assert(a !== undefined, `pipeline agent registered: ${id}`);
+  if (!a) continue;
+  assert(a.systemPrompt.length >= 1500, `${id}: systemPrompt ≥1500 chars (got ${a.systemPrompt.length})`);
+  assert(!/\b50\s*years\b/i.test(a.systemPrompt), `${id}: no "50 years" cliché`);
+  assert(a.promptVersion === "1.0.0", `${id}: promptVersion = 1.0.0`);
+}
 
 // 6. Default-field defaults are correctly applied to every advisor
+// Migration defaults apply to advisor-layer agents only.
 let defaultsOk = true;
 for (const [id, agent] of AGENT_REGISTRY) {
-  if (agent.layer !== "advisor") { console.error(`  layer wrong: ${id} = ${agent.layer}`); defaultsOk = false; }
+  if (agent.layer !== "advisor") continue;
   if (agent.modelTier !== "skill") { console.error(`  modelTier wrong: ${id} = ${agent.modelTier}`); defaultsOk = false; }
   if (agent.estimatedTokens !== 2000) { console.error(`  estimatedTokens wrong: ${id} = ${agent.estimatedTokens}`); defaultsOk = false; }
   if (agent.promptVersion !== "1.0.0") { console.error(`  promptVersion wrong: ${id} = ${agent.promptVersion}`); defaultsOk = false; }
@@ -110,8 +124,8 @@ assert(getAgent("does-not-exist") === undefined, "getAgent returns undefined for
 // 12. getAgentsByDomain returns the leadership trio
 const leadership = getAgentsByDomain("leadership").map((a) => a.id).sort();
 assert(
-  JSON.stringify(leadership) === JSON.stringify(["cto-advisor", "okr-coach", "startup-ceo"]),
-  `leadership domain has [cto-advisor, okr-coach, startup-ceo] (got ${JSON.stringify(leadership)})`
+  JSON.stringify(leadership) === JSON.stringify(["ceo", "cto-advisor", "okr-coach", "startup-ceo"]),
+  `leadership domain has [ceo, cto-advisor, okr-coach, startup-ceo] (got ${JSON.stringify(leadership)})`
 );
 
 // 13. getChainedAgents resolves cto-advisor's chains

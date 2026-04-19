@@ -568,7 +568,8 @@ describe("AURA_CORE override protection — prompt injection safety", () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe("Token budget — prompt size constraints", () => {
-  // Skill section stays reasonable (with calibration instructions)
+  // Skill section stays reasonable (with calibration instructions). Pipeline
+  // agents ship richer prompts; size budget per layer.
   {
     for (const [id, skill] of AGENT_REGISTRY) {
       const prompt = buildTruthSystemPrompt("chat", "normal", [], {
@@ -577,9 +578,10 @@ describe("Token budget — prompt size constraints", () => {
       });
       const skillStart = prompt.indexOf("ACTIVE DOMAIN EXPERTISE:");
       const skillSection = skillStart >= 0 ? prompt.slice(skillStart) : "";
+      const cap = skill.layer === "advisor" ? 3200 : 6000;
       assert(
-        skillSection.length < 3200,
-        `Skill section for ${id} under 3200 chars (got ${skillSection.length})`
+        skillSection.length < cap,
+        `Skill section for ${id} (${skill.layer}) under ${cap} chars (got ${skillSection.length})`
       );
     }
   }
@@ -618,17 +620,22 @@ describe("Token budget — prompt size constraints", () => {
     assert(chained.includes("INTEGRATION"), "Chained prompt has integration instruction");
   }
 
-  // Every skill's systemPrompt word count is reasonable
+  // Every agent's systemPrompt word count is reasonable. Pipeline agents
+  // (executive/lead/specialist) ship larger prompts than chat-time advisors;
+  // window per layer.
   {
     let allInRange = true;
     for (const [id, skill] of AGENT_REGISTRY) {
       const words = skill.systemPrompt.split(/\s+/).length;
-      if (words < 80 || words > 400) {
-        console.error(`  FAIL: ${id} systemPrompt is ${words} words`);
+      const isPipeline = skill.layer !== "advisor";
+      const min = isPipeline ? 200 : 80;
+      const max = isPipeline ? 700 : 400;
+      if (words < min || words > max) {
+        console.error(`  FAIL: ${id} (${skill.layer}) systemPrompt is ${words} words (expected ${min}–${max})`);
         allInRange = false;
       }
     }
-    assert(allInRange, "All skill systemPrompts 80-400 words");
+    assert(allInRange, "Every agent systemPrompt within layer-appropriate word range");
   }
 
   // Every skill has non-empty confidenceRules
@@ -649,11 +656,23 @@ describe("Token budget — prompt size constraints", () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe("Skill registry — completeness and integrity", () => {
-  assert(AGENT_REGISTRY.size === 26, `Registry has exactly 26 skills (got ${AGENT_REGISTRY.size})`);
+  assert(AGENT_REGISTRY.size === 38, `Registry has exactly 38 agents — 26 advisors + 12 pipeline (got ${AGENT_REGISTRY.size})`);
 
-  // Domain counts
+  // Domain counts (post-C1: pipeline agents added under engineering, product,
+  // leadership, operations, security, design, support).
   const expectedCounts: Record<string, number> = {
-    engineering: 5, marketing: 4, product: 3, finance: 3, leadership: 3, operations: 3, legal: 2, education: 2, health: 1,
+    engineering: 10, // 5 advisors + cto + eng-lead + qa-lead + architect + fullstack-eng
+    marketing: 4,    // unchanged
+    product: 4,      // 3 advisors + cpo
+    finance: 3,      // unchanged
+    leadership: 4,   // 3 advisors + ceo
+    operations: 5,   // 3 advisors + coo + devops-lead
+    legal: 2,        // unchanged
+    education: 2,    // unchanged
+    health: 1,       // unchanged
+    security: 1,     // ciso
+    design: 1,       // design-lead
+    support: 1,      // tech-writer
   };
   for (const [domain, expected] of Object.entries(expectedCounts)) {
     const actual = getAgentsByDomain(domain as any).length;
@@ -712,10 +731,10 @@ describe("Skill registry — completeness and integrity", () => {
     assert(getAgent("") === undefined, "Empty string skill returns undefined");
   }
 
-  // Exactly 9 domains
+  // 12 domains after C1: 9 advisor domains + security + design + support
   {
     const domains = new Set(Array.from(AGENT_REGISTRY.values()).map((s) => s.domain));
-    assert(domains.size === 9, `Exactly 9 domains (got ${domains.size})`);
+    assert(domains.size === 12, `12 domains across all agents (got ${domains.size})`);
   }
 
   // Every skill ID matches a naming convention (kebab-case)

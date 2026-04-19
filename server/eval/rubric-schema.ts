@@ -12,7 +12,20 @@
  */
 
 /** Canonical artifact types Aura evaluates today. */
-export type ArtifactType = "prd" | "adr" | "project-charter" | "chat-response";
+export type ArtifactType =
+  | "prd"
+  | "adr"
+  | "project-charter"
+  | "chat-response"
+  | "delivery-plan"
+  | "threat-model"
+  | "sprint-plan"
+  | "test-strategy"
+  | "design-spec"
+  | "deployment-runbook"
+  | "system-design"
+  | "code-change-set"
+  | "documentation-set";
 
 /** Four-level scoring guide. Score = {excellent: 1.0, good: 0.75, acceptable: 0.5, poor: 0.2}. */
 export interface ScoringGuide {

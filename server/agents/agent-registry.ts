@@ -48,6 +48,10 @@ import { tutoringExpert } from "./advisors/tutoring-expert";
 import { uxResearcher } from "./advisors/ux-researcher";
 import { wellnessCoach } from "./advisors/wellness-coach";
 
+// ── Pipeline imports (Virtual Company Engine roster) ────────────────────────
+
+import { PIPELINE_AGENTS } from "./pipeline";
+
 // ── Registry ────────────────────────────────────────────────────────────────
 
 export const AGENT_REGISTRY: Map<string, AgentDefinition> = new Map();
@@ -92,6 +96,12 @@ for (const agent of [
   brandStrategist,
   investorRelations,
 ]) {
+  registerAgent(agent);
+}
+
+// Pipeline agents (executives, leads, specialists). Order is preserved so
+// getAgentsByLayer() / getAgentsForPhase() iteration order is stable for tests.
+for (const agent of PIPELINE_AGENTS) {
   registerAgent(agent);
 }
 
