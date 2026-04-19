@@ -21,6 +21,7 @@ import { builderRouter } from "./builder";
 import { uploadsRouter } from "./uploads";
 import { mcpRouter } from "./mcp";
 import { skillsRouter } from "./skills";
+import { pipelineRouter } from "./pipeline";
 
 export function buildRouter(): Router {
   const r = Router();
@@ -34,5 +35,6 @@ export function buildRouter(): Router {
   r.use("/api", uploadsRouter);
   r.use("/api", mcpRouter);
   r.use("/api", skillsRouter);
+  r.use("/api", pipelineRouter);
   return r;
 }

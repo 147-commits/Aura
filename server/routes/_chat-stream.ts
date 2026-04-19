@@ -28,6 +28,7 @@ import type {
   AdvisorDomain,
 } from "../../shared/agent-schema";
 import { routeAgents, composeChainedPrompt, type RouteResult } from "../agents/agent-router";
+import { classifyIntent } from "../orchestrator/intent-classifier";
 import { generateCraft } from "../craft-engine";
 import { runResearch } from "../research-engine";
 import { shouldCheckConsolidation, runConsolidation } from "../memory-consolidator";
@@ -141,6 +142,34 @@ export async function handleChatStream(req: Request, res: Response): Promise<voi
 
     if (needsModeDetect) {
       res.write(`data: ${JSON.stringify({ type: "mode", mode })}\n\n`);
+    }
+
+    // ─── Intent classification (build vs chat) ────────────────────
+    // Rule-only by default to keep the chat hot path fast — the LLM
+    // fallback adds ~200ms which is a meaningful tax on every send.
+    // The frontend can re-classify via /api/pipeline/start if needed.
+    const intent = await classifyIntent(lastUserMessage, { ruleOnly: true });
+    perfLog({ step: "intent-classification", intent: intent.intent, confidence: intent.confidence, layer: intent.layer });
+    if (intent.intent === "build" || intent.intent === "build-extend") {
+      res.write(`data: ${JSON.stringify({
+        type: "build_detected",
+        intent: intent.intent,
+        confidence: intent.confidence,
+        reason: intent.reason,
+      })}\n\n`);
+      res.write("data: [DONE]\n\n");
+      res.end();
+      return;
+    }
+    if (intent.intent === "ambiguous") {
+      res.write(`data: ${JSON.stringify({
+        type: "clarification_needed",
+        message: "I'm not sure if you want me to build something or chat about it. Could you clarify?",
+        confidence: intent.confidence,
+        reason: intent.reason,
+      })}\n\n`);
+      // Continue with the chat flow — we still answer; the client can
+      // surface a "start a pipeline run" button alongside.
     }
 
     // ─── Agent resolution ──────────────────────────────────────────
