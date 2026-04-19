@@ -24,6 +24,20 @@ export async function initDatabase(): Promise<void> {
     // Add columns for existing installations
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_memory_consolidation TIMESTAMPTZ`).catch(() => {});
     await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS memory_count INTEGER DEFAULT 0`).catch(() => {});
+    // Subscription tier — used by the concurrency guard. Defaults to 'free'.
+    await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS tier TEXT DEFAULT 'free'`).catch(() => {});
+    // Postgres doesn't support ADD CONSTRAINT IF NOT EXISTS. Wrap in a DO
+    // block so a repeat run is a no-op rather than aborting the outer tx.
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'users_tier_check'
+        ) THEN
+          ALTER TABLE users ADD CONSTRAINT users_tier_check CHECK (tier IN ('free','paid','enterprise'));
+        END IF;
+      END $$;
+    `);
 
     // Conversation branching support
     await client.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS parent_message_id UUID`).catch(() => {});
@@ -258,6 +272,61 @@ export async function initDatabase(): Promise<void> {
 
     await client.query(`CREATE INDEX IF NOT EXISTS idx_mcp_connections_user_id ON mcp_connections(user_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_builder_projects_user_id ON builder_projects(user_id)`);
+
+    // ─── Orchestrator: concurrency guard ───────────────────────────────
+    // Each row = one in-flight pipeline run. Concurrency guard counts rows
+    // per user_id before inserting a new one.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS active_runs (
+        run_id UUID PRIMARY KEY,
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        org_id UUID,
+        started_at TIMESTAMPTZ DEFAULT NOW(),
+        status TEXT DEFAULT 'running'
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_active_runs_user ON active_runs(user_id)`);
+
+    // ─── Orchestrator: prompt versioning ───────────────────────────────
+    // Snapshot of every agent's systemPrompt at a given AgentDefinition.promptVersion.
+    // Populated by scripts/snapshot-prompts.ts. Replays look up (agent_id, version)
+    // here rather than reading the current registry, so old runs stay reproducible
+    // across prompt edits.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS prompt_versions (
+        id SERIAL PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        version TEXT NOT NULL,
+        system_prompt TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(agent_id, version)
+      )
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_prompt_versions_agent ON prompt_versions(agent_id)`);
+
+    // ─── Orchestrator: run steps ───────────────────────────────────────
+    // One row per agent invocation inside a run. prompt_version is stamped
+    // at invocation time so replays can re-hydrate the exact prompt used.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS run_steps (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        run_id UUID NOT NULL,
+        agent_id TEXT NOT NULL,
+        step_index INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'running',
+        input_payload JSONB,
+        output_payload JSONB,
+        started_at TIMESTAMPTZ DEFAULT NOW(),
+        ended_at TIMESTAMPTZ,
+        tokens_in INTEGER DEFAULT 0,
+        tokens_out INTEGER DEFAULT 0,
+        cost_usd NUMERIC(10, 6) DEFAULT 0,
+        error_message TEXT
+      )
+    `);
+    // Prompt version column — separate ALTER so pre-F5 installations pick it up.
+    await client.query(`ALTER TABLE run_steps ADD COLUMN IF NOT EXISTS prompt_version TEXT`).catch(() => {});
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_run_steps_run ON run_steps(run_id)`);
 
     await client.query("COMMIT");
     console.log("Database migration complete — all tables initialized");
