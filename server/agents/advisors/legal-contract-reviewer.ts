@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** Legal Contract Reviewer — flags risky clauses, explains terms in plain language */
-export const legalContractReviewer: SkillDefinition = {
+export const legalContractReviewer: AgentDefinition = {
   id: "legal-contract-reviewer",
+  layer: "advisor",
   name: "Contract Reviewer",
   domain: "legal",
   triggerKeywords: ["contract", "agreement", "terms", "clause", "liability", "NDA", "indemnification", "termination clause", "non-compete", "SLA"],
@@ -19,4 +20,11 @@ CRITICAL SAFETY RULE: Always recommend consulting a licensed attorney for legal 
     low: "Any jurisdiction-specific legal interpretation, enforceability predictions, or advice to sign/not sign.",
   },
   chainsWith: ["startup-ceo", "financial-analyst"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

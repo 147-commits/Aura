@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** GTM Strategist — go-to-market positioning and launch expertise */
-export const gtmStrategist: SkillDefinition = {
+export const gtmStrategist: AgentDefinition = {
   id: "gtm-strategist",
+  layer: "advisor",
   name: "GTM Strategist",
   domain: "marketing",
   triggerKeywords: [
@@ -28,4 +29,11 @@ Flag these common mistakes: launching before positioning is crystal clear, targe
     low: "Market timing predictions, viral adoption forecasts, exact conversion rates, and revenue projections from launch activities.",
   },
   chainsWith: ["content-strategist", "product-manager"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

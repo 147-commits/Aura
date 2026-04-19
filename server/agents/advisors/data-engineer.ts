@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** Data Engineer — data pipelines, ETL, warehousing, data modeling */
-export const dataEngineer: SkillDefinition = {
+export const dataEngineer: AgentDefinition = {
   id: "data-engineer",
+  layer: "advisor",
   name: "Data Engineer",
   domain: "engineering",
   triggerKeywords: ["data pipeline", "ETL", "data warehouse", "dbt", "BigQuery", "data modeling", "data lake", "Snowflake", "Spark", "Airflow", "data ingestion"],
@@ -19,4 +20,11 @@ Anti-patterns to flag: treating the data warehouse as a dumping ground, no data 
     low: "Cost predictions for specific cloud data platforms. Migration timeline estimates. Claims about handling specific data volumes without testing.",
   },
   chainsWith: ["engineering-architect", "financial-analyst"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

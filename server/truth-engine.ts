@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import type { SkillDefinition } from "./skill-engine";
+import type { AgentDefinition } from "../shared/agent-schema";
 import { buildCalibrationInstruction } from "./confidence-calibrator";
 import type { CraftRequest } from "../shared/schema";
 
@@ -7,12 +7,12 @@ export type Confidence = "High" | "Medium" | "Low";
 export type ExplainLevel = "simple" | "normal" | "expert";
 export type ChatMode = "chat" | "research" | "decision" | "brainstorm" | "explain";
 
-/** Optional context passed alongside an active skill */
-export interface SkillContext {
-  /** User's message that triggered the skill */
+/** Optional context passed alongside an active agent */
+export interface AgentContext {
+  /** User's message that triggered the agent */
   userMessage?: string;
-  /** IDs of chained skills to mention as available */
-  chainedSkillIds?: string[];
+  /** IDs of chained agents to mention as available */
+  chainedAgentIds?: string[];
 }
 
 export interface TruthResponse {
@@ -303,10 +303,10 @@ Confidence: High|Medium|Low`,
 };
 
 /**
- * Validates that a skill injection doesn't attempt to override Aura's core principles.
+ * Validates that an agent injection doesn't attempt to override Aura's core principles.
  * Blocks prompt injection attempts that try to bypass safety, confidence, or truth rules.
  */
-function validateSkillInjection(injection: string): boolean {
+function validateAgentInjection(injection: string): boolean {
   const forbidden = [
     "ignore previous",
     "override aura",
@@ -320,26 +320,26 @@ function validateSkillInjection(injection: string): boolean {
 }
 
 /**
- * Builds the domain expertise prompt section from an active skill and optional context.
- * Returns the formatted string to append, or empty string if no skill is active.
+ * Builds the domain expertise prompt section from an active agent and optional context.
+ * Returns the formatted string to append, or empty string if no agent is active.
  */
-function buildSkillPrompt(skill: SkillDefinition, context?: SkillContext): string {
+function buildAgentPrompt(agent: AgentDefinition, context?: AgentContext): string {
   const parts: string[] = [];
 
-  parts.push(`You are augmented with **${skill.name}** expertise (${skill.domain} domain).`);
+  parts.push(`You are augmented with **${agent.name}** expertise (${agent.domain} domain).`);
   parts.push("");
-  parts.push(skill.systemPrompt);
+  parts.push(agent.systemPrompt);
   parts.push("");
   parts.push("DOMAIN-SPECIFIC CONFIDENCE RULES (use these IN ADDITION to Aura's base confidence rules):");
-  parts.push(`→ High: ${skill.confidenceRules.high}`);
-  parts.push(`→ Medium: ${skill.confidenceRules.medium}`);
-  parts.push(`→ Low: ${skill.confidenceRules.low}`);
+  parts.push(`→ High: ${agent.confidenceRules.high}`);
+  parts.push(`→ Medium: ${agent.confidenceRules.medium}`);
+  parts.push(`→ Low: ${agent.confidenceRules.low}`);
   parts.push("");
-  parts.push(buildCalibrationInstruction(skill.domain));
+  parts.push(buildCalibrationInstruction(agent.domain));
 
-  if (context?.chainedSkillIds && context.chainedSkillIds.length > 0) {
+  if (context?.chainedAgentIds && context.chainedAgentIds.length > 0) {
     parts.push("");
-    parts.push(`Related expertise available: ${context.chainedSkillIds.join(", ")}. Mention these if the user's question spans multiple domains.`);
+    parts.push(`Related expertise available: ${context.chainedAgentIds.join(", ")}. Mention these if the user's question spans multiple domains.`);
   }
 
   return parts.join("\n");
@@ -372,8 +372,8 @@ export function buildTruthSystemPrompt(
   memory: { text: string; category: string }[],
   options?: {
     isTriage?: boolean;
-    activeSkill?: SkillDefinition;
-    skillContext?: SkillContext;
+    activeAgent?: AgentDefinition;
+    agentContext?: AgentContext;
   }
 ): string {
   // 1 + 2. AURA_CORE is embedded inside each mode template
@@ -390,19 +390,19 @@ export function buildTruthSystemPrompt(
   // 5. Triage
   const triageSection = options?.isTriage ? `\n\nIMPORTANT OVERRIDE — TRIAGE MODE:\n${TRIAGE_INSTRUCTION}` : "";
 
-  // 6. Skill (always last)
-  let skillSection = "";
-  if (options?.activeSkill) {
-    const injection = buildSkillPrompt(options.activeSkill, options.skillContext);
-    if (!validateSkillInjection(injection)) {
-      throw new Error("Invalid skill injection blocked");
+  // 6. Agent expertise (always last)
+  let agentSection = "";
+  if (options?.activeAgent) {
+    const injection = buildAgentPrompt(options.activeAgent, options.agentContext);
+    if (!validateAgentInjection(injection)) {
+      throw new Error("Invalid agent injection blocked");
     }
-    skillSection = `\n\n---\nACTIVE DOMAIN EXPERTISE:\n${injection}`;
+    agentSection = `\n\n---\nACTIVE DOMAIN EXPERTISE:\n${injection}`;
   }
 
   return `${modePrompt}
 
-Communication level: ${levelInstruction}${memorySection}${triageSection}${skillSection}`;
+Communication level: ${levelInstruction}${memorySection}${triageSection}${agentSection}`;
 }
 
 export function parseConfidence(content: string): { cleanContent: string; confidence: Confidence; confidenceReason: string } {

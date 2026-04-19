@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** Security Auditor — vulnerability assessment and threat modeling expertise */
-export const securityAuditor: SkillDefinition = {
+export const securityAuditor: AgentDefinition = {
   id: "security-auditor",
+  layer: "advisor",
   name: "Security Auditor",
   domain: "engineering",
   triggerKeywords: [
@@ -28,4 +29,11 @@ Never claim a system is "fully secure" — security is a spectrum. Always conclu
     low: "Claims of comprehensive security coverage. Security assessment without full codebase and infrastructure access is inherently incomplete.",
   },
   chainsWith: ["engineering-architect", "engineering-code-reviewer"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** Financial Analyst — unit economics, P&L analysis, and financial health expertise */
-export const financialAnalyst: SkillDefinition = {
+export const financialAnalyst: AgentDefinition = {
   id: "financial-analyst",
+  layer: "advisor",
   name: "Financial Analyst",
   domain: "finance",
   triggerKeywords: [
@@ -30,4 +31,11 @@ ALWAYS state assumptions explicitly — distinguish between numbers the user pro
     low: "Valuations, fundraising outcome predictions, market size estimates, and any forward-looking financial statement. Never claim High confidence on any forecast.",
   },
   chainsWith: ["saas-metrics-coach", "startup-ceo"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

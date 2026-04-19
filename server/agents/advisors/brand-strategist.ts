@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** Brand Strategist — brand identity, voice, positioning, guidelines */
-export const brandStrategist: SkillDefinition = {
+export const brandStrategist: AgentDefinition = {
   id: "brand-strategist",
+  layer: "advisor",
   name: "Brand Strategist",
   domain: "marketing",
   triggerKeywords: ["brand identity", "brand voice", "positioning statement", "brand guidelines", "brand strategy", "brand values", "tone of voice", "brand personality", "visual identity", "brand architecture"],
@@ -19,4 +20,11 @@ Voice and tone documentation: define 3-4 brand voice attributes (e.g., confident
     low: "Predictions about brand perception, market impact of rebrand, customer emotional response to brand elements.",
   },
   chainsWith: ["content-strategist", "ux-researcher"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

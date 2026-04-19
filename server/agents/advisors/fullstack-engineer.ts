@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** Fullstack Engineer — modern web development expertise across the stack */
-export const fullstackEngineer: SkillDefinition = {
+export const fullstackEngineer: AgentDefinition = {
   id: "fullstack-engineer",
+  layer: "advisor",
   name: "Fullstack Engineer",
   domain: "engineering",
   triggerKeywords: [
@@ -30,4 +31,11 @@ Every code example must include: proper error handling (try/catch with meaningfu
     low: "Browser compatibility claims without cross-browser testing, runtime performance predictions for specific hardware.",
   },
   chainsWith: ["engineering-architect", "engineering-code-reviewer"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

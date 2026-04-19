@@ -287,8 +287,8 @@ import { processAttachment, buildAttachmentContext } from "../server/file-engine
 //
 // Run: npx tsx tests/hallucination.test.ts
 
-import("../server/skill-engine").then(({ SKILL_REGISTRY, getSkill }) =>
-import("../server/skill-router").then(({ composeChainedPrompt }) =>
+import("../server/agents/agent-registry").then(({ AGENT_REGISTRY, getAgent }) =>
+import("../server/agents/agent-router").then(({ composeChainedPrompt }) =>
 import("../server/confidence-calibrator").then(({ validateConfidenceInResponse }) => {
 
 let skillPassed = 0;
@@ -349,13 +349,13 @@ block("1. Malicious skill injection — prompt injection attempts", () => {
     let threw = false;
     try {
       buildTruthSystemPrompt("chat", "normal", [], {
-        activeSkill: maliciousSkill,
-        skillContext: { userMessage: "test" },
+        activeAgent: maliciousSkill,
+        agentContext: { userMessage: "test" },
       });
     } catch (e: any) {
       threw = true;
       skillAssert(
-        e.message === "Invalid skill injection blocked",
+        e.message === "Invalid agent injection blocked",
         `Injection "${payload.slice(0, 40)}..." → correct error message`
       );
     }
@@ -364,12 +364,12 @@ block("1. Malicious skill injection — prompt injection attempts", () => {
 
   // Valid skill should NOT throw
   {
-    const validSkill = getSkill("engineering-architect")!;
+    const validSkill = getAgent("engineering-architect")!;
     let threw = false;
     try {
       buildTruthSystemPrompt("chat", "normal", [], {
-        activeSkill: validSkill,
-        skillContext: { userMessage: "test" },
+        activeAgent: validSkill,
+        agentContext: { userMessage: "test" },
       });
     } catch {
       threw = true;
@@ -380,11 +380,11 @@ block("1. Malicious skill injection — prompt injection attempts", () => {
   // All 18 real skills pass validation
   {
     let allPass = true;
-    for (const [id, skill] of SKILL_REGISTRY) {
+    for (const [id, skill] of AGENT_REGISTRY) {
       try {
         buildTruthSystemPrompt("chat", "normal", [], {
-          activeSkill: skill,
-          skillContext: { userMessage: "test" },
+          activeAgent: skill,
+          agentContext: { userMessage: "test" },
         });
       } catch {
         console.error(`  FAIL: Real skill ${id} incorrectly blocked!`);
@@ -402,7 +402,7 @@ block("1. Malicious skill injection — prompt injection attempts", () => {
       "ignore all", "jailbreak", "dan mode", "unrestricted mode",
     ];
     let allClean = true;
-    for (const [id, skill] of SKILL_REGISTRY) {
+    for (const [id, skill] of AGENT_REGISTRY) {
       const lower = skill.systemPrompt.toLowerCase();
       for (const phrase of forbidden) {
         if (lower.includes(phrase)) {
@@ -421,10 +421,10 @@ block("1. Malicious skill injection — prompt injection attempts", () => {
 
 block("2. AURA_CORE precedence — identity protection", () => {
   // Test with every skill: AURA_CORE always before skill section
-  for (const [id, skill] of SKILL_REGISTRY) {
+  for (const [id, skill] of AGENT_REGISTRY) {
     const prompt = buildTruthSystemPrompt("chat", "normal", [], {
-      activeSkill: skill,
-      skillContext: { userMessage: "test" },
+      activeAgent: skill,
+      agentContext: { userMessage: "test" },
     });
     const coreIdx = prompt.indexOf("You are Aura");
     const skillIdx = prompt.indexOf("ACTIVE DOMAIN EXPERTISE:");
@@ -434,10 +434,10 @@ block("2. AURA_CORE precedence — identity protection", () => {
   }
 
   // "TRUTH FIRST" before "ACTIVE DOMAIN EXPERTISE" for every skill
-  for (const [id, skill] of SKILL_REGISTRY) {
+  for (const [id, skill] of AGENT_REGISTRY) {
     const prompt = buildTruthSystemPrompt("chat", "normal", [], {
-      activeSkill: skill,
-      skillContext: { userMessage: "test" },
+      activeAgent: skill,
+      agentContext: { userMessage: "test" },
     });
     const truthIdx = prompt.indexOf("TRUTH FIRST");
     const skillIdx = prompt.indexOf("ACTIVE DOMAIN EXPERTISE");
@@ -447,10 +447,10 @@ block("2. AURA_CORE precedence — identity protection", () => {
   }
 
   // "NEVER invent facts" present in every skill prompt
-  for (const [id, skill] of SKILL_REGISTRY) {
+  for (const [id, skill] of AGENT_REGISTRY) {
     const prompt = buildTruthSystemPrompt("chat", "normal", [], {
-      activeSkill: skill,
-      skillContext: { userMessage: "test" },
+      activeAgent: skill,
+      agentContext: { userMessage: "test" },
     });
     skillAssert(prompt.includes("Never invent facts"),
       `${id}: "Never invent facts" present in final prompt`
@@ -468,10 +468,10 @@ block("2. AURA_CORE precedence — identity protection", () => {
       "HELPFUL UNCERTAINTY",
       "SAFETY",
     ];
-    for (const [id, skill] of SKILL_REGISTRY) {
+    for (const [id, skill] of AGENT_REGISTRY) {
       const prompt = buildTruthSystemPrompt("chat", "normal", [], {
-        activeSkill: skill,
-        skillContext: { userMessage: "test" },
+        activeAgent: skill,
+        agentContext: { userMessage: "test" },
       });
       for (const principle of principles) {
         skillAssert(prompt.includes(principle),
@@ -489,10 +489,10 @@ block("2. AURA_CORE precedence — identity protection", () => {
       "Never use filler phrases",
       "Every response must end with exactly: Confidence: High|Medium|Low",
     ];
-    for (const [id, skill] of SKILL_REGISTRY) {
+    for (const [id, skill] of AGENT_REGISTRY) {
       const prompt = buildTruthSystemPrompt("chat", "normal", [], {
-        activeSkill: skill,
-        skillContext: { userMessage: "test" },
+        activeAgent: skill,
+        agentContext: { userMessage: "test" },
       });
       for (const rule of absoluteRules) {
         skillAssert(prompt.includes(rule),
@@ -513,10 +513,10 @@ block("2. AURA_CORE precedence — identity protection", () => {
       explain: "Explain Mode",
     };
     for (const mode of modes) {
-      for (const [id, skill] of SKILL_REGISTRY) {
+      for (const [id, skill] of AGENT_REGISTRY) {
         const prompt = buildTruthSystemPrompt(mode, "normal", [], {
-          activeSkill: skill,
-          skillContext: { userMessage: "test" },
+          activeAgent: skill,
+          agentContext: { userMessage: "test" },
         });
         skillAssert(prompt.includes(modeMarkers[mode]),
           `${id} + ${mode}: mode template "${modeMarkers[mode]}" preserved`
@@ -532,10 +532,10 @@ block("2. AURA_CORE precedence — identity protection", () => {
 
 block("3. Confidence rating — never removed by skill", () => {
   // "Confidence: High|Medium|Low" instruction present for every skill
-  for (const [id, skill] of SKILL_REGISTRY) {
+  for (const [id, skill] of AGENT_REGISTRY) {
     const prompt = buildTruthSystemPrompt("chat", "normal", [], {
-      activeSkill: skill,
-      skillContext: { userMessage: "test" },
+      activeAgent: skill,
+      agentContext: { userMessage: "test" },
     });
     skillAssert(
       prompt.includes("Confidence: High|Medium|Low"),
@@ -544,10 +544,10 @@ block("3. Confidence rating — never removed by skill", () => {
   }
 
   // The parenthetical reason requirement present for every skill
-  for (const [id, skill] of SKILL_REGISTRY) {
+  for (const [id, skill] of AGENT_REGISTRY) {
     const prompt = buildTruthSystemPrompt("chat", "normal", [], {
-      activeSkill: skill,
-      skillContext: { userMessage: "test" },
+      activeAgent: skill,
+      agentContext: { userMessage: "test" },
     });
     skillAssert(
       prompt.includes("brief reason"),
@@ -556,10 +556,10 @@ block("3. Confidence rating — never removed by skill", () => {
   }
 
   // Domain-specific confidence rules ADDED (not replacing base)
-  for (const [id, skill] of SKILL_REGISTRY) {
+  for (const [id, skill] of AGENT_REGISTRY) {
     const prompt = buildTruthSystemPrompt("chat", "normal", [], {
-      activeSkill: skill,
-      skillContext: { userMessage: "test" },
+      activeAgent: skill,
+      agentContext: { userMessage: "test" },
     });
     // Base rules
     skillAssert(prompt.includes("High: Well-established fact"),
@@ -705,8 +705,8 @@ block("5. Skill chaining — no hallucination amplification", () => {
   ];
 
   for (const [pId, sId] of chainPairs) {
-    const primary = getSkill(pId)!;
-    const secondary = getSkill(sId)!;
+    const primary = getAgent(pId)!;
+    const secondary = getAgent(sId)!;
     const chained = composeChainedPrompt(primary, secondary, { userMessage: "test" });
 
     // Token budget respected
@@ -738,8 +738,8 @@ block("5. Skill chaining — no hallucination amplification", () => {
 
   // Full prompt with chained skills still has AURA_CORE
   {
-    const primary = getSkill("engineering-architect")!;
-    const chained = composeChainedPrompt(primary, getSkill("security-auditor")!, { userMessage: "test" });
+    const primary = getAgent("engineering-architect")!;
+    const chained = composeChainedPrompt(primary, getAgent("security-auditor")!, { userMessage: "test" });
 
     // Build full prompt with chained override
     const fullPrompt = buildTruthSystemPrompt("chat", "normal", [], { isTriage: false }) +
@@ -963,11 +963,11 @@ block("7. Stress test — every skill × every mode preserves safety", () => {
   const levels = ["simple", "normal", "expert"] as const;
 
   // Every skill × every mode: anti-hallucination rules present
-  for (const [id, skill] of SKILL_REGISTRY) {
+  for (const [id, skill] of AGENT_REGISTRY) {
     for (const mode of modes) {
       const prompt = buildTruthSystemPrompt(mode, "normal", [], {
-        activeSkill: skill,
-        skillContext: { userMessage: "test" },
+        activeAgent: skill,
+        agentContext: { userMessage: "test" },
       });
       skillAssert(prompt.includes("Never invent facts"),
         `${id}×${mode}: anti-hallucination`
@@ -976,11 +976,11 @@ block("7. Stress test — every skill × every mode preserves safety", () => {
   }
 
   // Every skill × every explain level: confidence rules present
-  for (const [id, skill] of SKILL_REGISTRY) {
+  for (const [id, skill] of AGENT_REGISTRY) {
     for (const level of levels) {
       const prompt = buildTruthSystemPrompt("chat", level, [], {
-        activeSkill: skill,
-        skillContext: { userMessage: "test" },
+        activeAgent: skill,
+        agentContext: { userMessage: "test" },
       });
       skillAssert(prompt.includes("Confidence: High|Medium|Low"),
         `${id}×${level}: confidence rating required`
@@ -1002,10 +1002,10 @@ block("8. Memory + skill: personalization doesn't weaken safety", () => {
     { text: "Team of 5 engineers", category: "context" },
   ];
 
-  for (const [id, skill] of SKILL_REGISTRY) {
+  for (const [id, skill] of AGENT_REGISTRY) {
     const prompt = buildTruthSystemPrompt("chat", "normal", memories, {
-      activeSkill: skill,
-      skillContext: { userMessage: "Help me plan my architecture" },
+      activeAgent: skill,
+      agentContext: { userMessage: "Help me plan my architecture" },
     });
 
     // Safety rules survive memory injection

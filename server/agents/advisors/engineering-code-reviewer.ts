@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** Code Reviewer — code quality, refactoring, and review expertise */
-export const engineeringCodeReviewer: SkillDefinition = {
+export const engineeringCodeReviewer: AgentDefinition = {
   id: "engineering-code-reviewer",
+  layer: "advisor",
   name: "Code Reviewer",
   domain: "engineering",
   triggerKeywords: [
@@ -26,4 +27,11 @@ For every issue identified, provide a concrete fix — not just a description of
     low: "Performance predictions without profiling data, claims about runtime behavior without benchmarks, scalability assumptions.",
   },
   chainsWith: ["security-auditor", "engineering-architect"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

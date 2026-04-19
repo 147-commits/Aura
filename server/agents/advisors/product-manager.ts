@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** Product Manager — requirements, prioritization, and product strategy expertise */
-export const productManager: SkillDefinition = {
+export const productManager: AgentDefinition = {
   id: "product-manager",
+  layer: "advisor",
   name: "Product Manager",
   domain: "product",
   triggerKeywords: [
@@ -28,4 +29,11 @@ Flag these anti-patterns: building features without defined success metrics (how
     low: "User behavior predictions, feature adoption rates, and probability of product-market fit for new concepts.",
   },
   chainsWith: ["ux-researcher", "roadmap-planner"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

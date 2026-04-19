@@ -15,7 +15,7 @@ import { getTemplates } from "../server/craft-templates";
 import { WEBSITE_BUILDER_PROMPT, MOBILE_APP_BUILDER_PROMPT } from "../server/builder-prompts";
 import { RN_ERROR_FIXES, buildErrorCorrectionPrompt } from "../server/snack-engine";
 import { getTruthUXVariant, shouldShowTruthUI } from "../lib/ab-test";
-import { SKILL_REGISTRY, getSkillsByDomain, getSkill } from "../server/skill-engine";
+import { AGENT_REGISTRY, getAgentsByDomain, getAgent } from "../server/agents/agent-registry";
 
 let passed = 0;
 let failed = 0;
@@ -175,18 +175,18 @@ await phase("PHASE 4: Builder", () => {
 
 await phase("CROSS-PHASE: AURA_CORE integrity", () => {
   // All 26 skills preserve core principles
-  for (const [id, skill] of SKILL_REGISTRY) {
-    const prompt = buildTruthSystemPrompt("chat", "normal", [], { activeSkill: skill });
+  for (const [id, skill] of AGENT_REGISTRY) {
+    const prompt = buildTruthSystemPrompt("chat", "normal", [], { activeAgent: skill });
     assert(prompt.includes("TRUTH FIRST"), `[ ] ${id}: TRUTH FIRST preserved`);
     assert(prompt.includes("Never invent facts"), `[ ] ${id}: anti-hallucination preserved`);
     assert(prompt.includes("Confidence: High|Medium|Low"), `[ ] ${id}: confidence required`);
   }
 
   // Skill counts
-  assert(SKILL_REGISTRY.size === 26, "[ ] 26 skills registered");
-  assert(getSkillsByDomain("engineering").length === 5, "[ ] 5 engineering skills");
-  assert(getSkillsByDomain("marketing").length === 4, "[ ] 4 marketing skills");
-  assert(getSkillsByDomain("finance").length === 3, "[ ] 3 finance skills");
+  assert(AGENT_REGISTRY.size === 26, "[ ] 26 skills registered");
+  assert(getAgentsByDomain("engineering").length === 5, "[ ] 5 engineering skills");
+  assert(getAgentsByDomain("marketing").length === 4, "[ ] 4 marketing skills");
+  assert(getAgentsByDomain("finance").length === 3, "[ ] 3 finance skills");
 });
 
 // ─── Summary ────────────────────────────────────────────────────────────────

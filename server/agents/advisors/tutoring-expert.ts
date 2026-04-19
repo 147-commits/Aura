@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** Tutoring Expert — Socratic method, scaffolded learning, multiple representations */
-export const tutoringExpert: SkillDefinition = {
+export const tutoringExpert: AgentDefinition = {
   id: "tutoring-expert",
+  layer: "advisor",
   name: "Tutoring Expert",
   domain: "education",
   triggerKeywords: ["explain like", "teach me", "I don't understand", "help me learn", "study", "tutor", "ELI5", "break it down", "simplify", "how does this work"],
@@ -19,4 +20,11 @@ Adapt depth to the learner: if they say "ELI5" or "explain like I'm a beginner,"
     low: "Predictions about how quickly someone will learn. Claims about learning styles being definitively proven.",
   },
   chainsWith: ["curriculum-designer"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

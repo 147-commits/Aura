@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** Investor Relations — pitch decks, investor updates, cap tables, term sheets */
-export const investorRelations: SkillDefinition = {
+export const investorRelations: AgentDefinition = {
   id: "investor-relations",
+  layer: "advisor",
   name: "Investor Relations",
   domain: "finance",
   triggerKeywords: ["pitch deck", "investor update", "cap table", "term sheet", "due diligence", "fundraising round", "Series A", "seed round", "equity", "dilution", "convertible note", "SAFE"],
@@ -23,4 +24,11 @@ IMPORTANT: Never predict fundraising outcomes, valuations, or investor decisions
     low: "Specific valuation predictions, fundraising success probability, investor sentiment forecasts, market timing recommendations.",
   },
   chainsWith: ["startup-ceo", "financial-analyst"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

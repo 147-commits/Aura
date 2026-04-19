@@ -1,5 +1,5 @@
 import type { ChatMode } from "./truth-engine";
-import type { SkillDomain } from "./skill-engine";
+import type { AgentDomain } from "../shared/agent-schema";
 import type { ModelId } from "./ai-provider";
 import { trackTokenUsage } from "./middleware";
 
@@ -35,7 +35,7 @@ export interface ModelConfig {
 }
 
 export interface SkillModelOptions {
-  activeSkillDomain?: SkillDomain;
+  activeSkillDomain?: AgentDomain;
   isChained?: boolean;
   isTriage?: boolean;
 }

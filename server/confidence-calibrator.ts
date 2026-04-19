@@ -11,7 +11,12 @@
  *   2. Validates confidence claims in responses for monitoring
  */
 
-import type { SkillDomain } from "./skill-engine";
+import type { AdvisorDomain, AgentDomain } from "../shared/agent-schema";
+
+/** True when a domain has confidence rules registered. */
+function isAdvisorDomain(domain: AgentDomain): domain is AdvisorDomain {
+  return domain in DOMAIN_CONFIDENCE_RULES;
+}
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -19,7 +24,7 @@ export type Confidence = "High" | "Medium" | "Low";
 
 export interface ConfidenceRules {
   /** Domain these rules apply to */
-  domain: SkillDomain;
+  domain: AdvisorDomain;
   /** Conditions where High confidence is appropriate */
   highAllowedWhen: string[];
   /** Things that can NEVER be rated High */
@@ -45,7 +50,7 @@ export interface ConfidenceValidationResult {
 
 // ── Domain Confidence Rules ─────────────────────────────────────────────────
 
-export const DOMAIN_CONFIDENCE_RULES: Record<SkillDomain, ConfidenceRules> = {
+export const DOMAIN_CONFIDENCE_RULES: Record<AdvisorDomain, ConfidenceRules> = {
   engineering: {
     domain: "engineering",
     highAllowedWhen: [
@@ -366,7 +371,8 @@ export const DOMAIN_CONFIDENCE_RULES: Record<SkillDomain, ConfidenceRules> = {
  * This is appended to every skill prompt to make confidence ratings
  * domain-specific and dramatically more trustworthy.
  */
-export function buildCalibrationInstruction(domain: SkillDomain): string {
+export function buildCalibrationInstruction(domain: AgentDomain): string {
+  if (!isAdvisorDomain(domain)) return "";
   const rules = DOMAIN_CONFIDENCE_RULES[domain];
   const lines: string[] = [];
 
@@ -392,7 +398,7 @@ export function buildCalibrationInstruction(domain: SkillDomain): string {
  */
 export function validateConfidenceInResponse(
   response: string,
-  domain: SkillDomain
+  domain: AgentDomain
 ): ConfidenceValidationResult {
   // Parse the confidence line
   const match = response.match(/Confidence:\s*(High|Medium|Low)/i);
@@ -402,6 +408,9 @@ export function validateConfidenceInResponse(
 
   const raw = match[1];
   const claimed = (raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase()) as Confidence;
+  if (!isAdvisorDomain(domain)) {
+    return { claimed, isAppropriate: true };
+  }
   const rules = DOMAIN_CONFIDENCE_RULES[domain];
   const lower = response.toLowerCase();
 

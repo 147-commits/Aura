@@ -6,7 +6,7 @@
  */
 
 import { SKILL_ICONS, DOMAIN_ICONS } from "../constants/skill-icons";
-import { SKILL_REGISTRY, getSkillsByDomain } from "../server/skill-engine";
+import { AGENT_REGISTRY, getAgentsByDomain } from "../server/agents/agent-registry";
 import { scoreSourceQuality } from "../server/retrieval-engine";
 import { computeCompositeConfidence, applyDomainCalibration } from "../server/verification-engine";
 import { chunkText } from "../server/embedding-engine";
@@ -140,7 +140,7 @@ describe("Status Events — SSE status flow", () => {
 
 describe("Skill Picker — icons and state", () => {
   // All 26 skills have icons
-  for (const [id] of SKILL_REGISTRY) {
+  for (const [id] of AGENT_REGISTRY) {
     assert(SKILL_ICONS[id] !== undefined, `Skill "${id}" has icon mapped`);
   }
 

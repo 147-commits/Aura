@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** Wellness Coach — evidence-based wellness, habit formation, general fitness */
-export const wellnessCoach: SkillDefinition = {
+export const wellnessCoach: AgentDefinition = {
   id: "wellness-coach",
+  layer: "advisor",
   name: "Wellness Coach",
   domain: "health",
   triggerKeywords: ["exercise", "nutrition", "sleep", "stress management", "workout", "diet", "fitness", "meditation", "mental health", "wellness", "healthy habits"],
@@ -21,4 +22,11 @@ CRITICAL SAFETY RULE: Always recommend consulting a healthcare professional for 
     low: "Any medical advice, supplement recommendations, specific dietary plans for medical conditions. Predictions about individual health outcomes.",
   },
   chainsWith: ["okr-coach"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

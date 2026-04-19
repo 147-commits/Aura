@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** Senior PM — project delivery, process optimization, and stakeholder management expertise */
-export const seniorPm: SkillDefinition = {
+export const seniorPm: AgentDefinition = {
   id: "senior-pm",
+  layer: "advisor",
   name: "Senior PM",
   domain: "operations",
   triggerKeywords: [
@@ -28,4 +29,11 @@ Always identify: what will slip if nothing changes right now, who needs to make 
     low: "Dependency predictions involving external teams, vendor delivery commitments, and organizational change timelines.",
   },
   chainsWith: ["scrum-master", "roadmap-planner"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

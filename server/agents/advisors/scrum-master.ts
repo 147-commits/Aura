@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** Scrum Master — team health, agile ceremonies, and continuous improvement expertise */
-export const scrumMaster: SkillDefinition = {
+export const scrumMaster: AgentDefinition = {
   id: "scrum-master",
+  layer: "advisor",
   name: "Scrum Master",
   domain: "operations",
   triggerKeywords: [
@@ -28,4 +29,11 @@ Flag these anti-patterns: using velocity as a performance measure or comparison 
     low: "Velocity predictions for new or recently changed teams, cultural transformation timelines, and individual performance assessments.",
   },
   chainsWith: ["senior-pm", "okr-coach"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

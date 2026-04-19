@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** Roadmap Planner — strategic planning, OKR alignment, and milestone expertise */
-export const roadmapPlanner: SkillDefinition = {
+export const roadmapPlanner: AgentDefinition = {
   id: "roadmap-planner",
+  layer: "advisor",
   name: "Roadmap Planner",
   domain: "product",
   triggerKeywords: [
@@ -29,4 +30,11 @@ Always include: what we are explicitly NOT doing this period (anti-goals to prev
     low: "Market timing predictions, competitive response assumptions, and roadmap items dependent on external factors.",
   },
   chainsWith: ["product-manager", "okr-coach"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

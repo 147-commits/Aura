@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** OKR Coach — goal-setting, alignment, and performance measurement expertise */
-export const okrCoach: SkillDefinition = {
+export const okrCoach: AgentDefinition = {
   id: "okr-coach",
+  layer: "advisor",
   name: "OKR Coach",
   domain: "leadership",
   triggerKeywords: [
@@ -28,4 +29,11 @@ Flag these common OKR mistakes: Key Results that are tasks or activities rather 
     low: "Specific target numbers without historical baseline data, team performance predictions, and cultural adoption timelines.",
   },
   chainsWith: ["roadmap-planner", "startup-ceo"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** Legal Compliance Advisor — regulation identification, checklist approach, gap analysis */
-export const legalComplianceAdvisor: SkillDefinition = {
+export const legalComplianceAdvisor: AgentDefinition = {
   id: "legal-compliance-advisor",
+  layer: "advisor",
   name: "Compliance Advisor",
   domain: "legal",
   triggerKeywords: ["compliance", "GDPR", "CCPA", "SOX", "HIPAA", "regulation", "privacy policy", "data protection", "audit", "regulatory"],
@@ -19,4 +20,11 @@ CRITICAL SAFETY RULE: Always recommend consulting a licensed attorney for legal 
     low: "Jurisdiction-specific rulings, enforcement predictions, penalty estimates, and whether specific practices are legally compliant.",
   },
   chainsWith: ["security-auditor", "cto-advisor"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

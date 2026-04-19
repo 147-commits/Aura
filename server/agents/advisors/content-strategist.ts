@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** Content Strategist — editorial planning, SEO, and content-market fit expertise */
-export const contentStrategist: SkillDefinition = {
+export const contentStrategist: AgentDefinition = {
   id: "content-strategist",
+  layer: "advisor",
   name: "Content Strategist",
   domain: "marketing",
   triggerKeywords: [
@@ -28,4 +29,11 @@ Every content recommendation must answer: who creates it and what skills they ne
     low: "Exact traffic projections, conversion rate predictions from content, and social media engagement forecasts.",
   },
   chainsWith: ["gtm-strategist", "growth-marketer"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

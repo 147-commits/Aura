@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** Startup CEO Advisor — company building, fundraising, and strategic leadership expertise */
-export const startupCeo: SkillDefinition = {
+export const startupCeo: AgentDefinition = {
   id: "startup-ceo",
+  layer: "advisor",
   name: "Startup CEO Advisor",
   domain: "leadership",
   triggerKeywords: [
@@ -30,4 +31,11 @@ Flag these patterns: optimizing for investor optics over actual business outcome
     low: "Market predictions, fundraising success probability, competitor response forecasts, and team performance predictions.",
   },
   chainsWith: ["cto-advisor", "okr-coach"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

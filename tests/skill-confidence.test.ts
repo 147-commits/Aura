@@ -13,7 +13,7 @@ import {
   DOMAIN_CONFIDENCE_RULES,
 } from "../server/confidence-calibrator";
 import { buildTruthSystemPrompt } from "../server/truth-engine";
-import { getSkill, SKILL_REGISTRY, getSkillsByDomain } from "../server/skill-engine";
+import { getAgent, AGENT_REGISTRY, getAgentsByDomain } from "../server/agents/agent-registry";
 
 // ─── Test Harness ───────────────────────────────────────────────────────────
 
@@ -571,10 +571,10 @@ describe("BLOCK 2: Edge cases — parsing and format", () => {
 
 describe("BLOCK 3: Every skill prompt includes calibration instructions", () => {
   // All 18 skills get calibration
-  for (const [id, skill] of SKILL_REGISTRY) {
+  for (const [id, skill] of AGENT_REGISTRY) {
     const prompt = buildTruthSystemPrompt("chat", "normal", [], {
-      activeSkill: skill,
-      skillContext: { userMessage: "test" },
+      activeAgent: skill,
+      agentContext: { userMessage: "test" },
     });
     assert(
       prompt.includes("CONFIDENCE CALIBRATION FOR " + skill.domain.toUpperCase()),
@@ -584,11 +584,11 @@ describe("BLOCK 3: Every skill prompt includes calibration instructions", () => 
 
   // Finance skills specifically mention assumptions
   {
-    const skills = getSkillsByDomain("finance");
+    const skills = getAgentsByDomain("finance");
     for (const skill of skills) {
       const prompt = buildTruthSystemPrompt("chat", "normal", [], {
-        activeSkill: skill,
-        skillContext: { userMessage: "test" },
+        activeAgent: skill,
+        agentContext: { userMessage: "test" },
       });
       assert(
         prompt.includes("assumptions explicitly"),
@@ -598,10 +598,10 @@ describe("BLOCK 3: Every skill prompt includes calibration instructions", () => 
   }
 
   // Calibration appears AFTER the base confidence rules
-  for (const [id, skill] of SKILL_REGISTRY) {
+  for (const [id, skill] of AGENT_REGISTRY) {
     const prompt = buildTruthSystemPrompt("chat", "normal", [], {
-      activeSkill: skill,
-      skillContext: { userMessage: "test" },
+      activeAgent: skill,
+      agentContext: { userMessage: "test" },
     });
     const baseIdx = prompt.indexOf("DOMAIN-SPECIFIC CONFIDENCE RULES");
     const calIdx = prompt.indexOf("CONFIDENCE CALIBRATION FOR");
@@ -611,10 +611,10 @@ describe("BLOCK 3: Every skill prompt includes calibration instructions", () => 
 
   // Calibration appears AFTER the skill's systemPrompt content
   {
-    const skill = getSkill("engineering-architect")!;
+    const skill = getAgent("engineering-architect")!;
     const prompt = buildTruthSystemPrompt("chat", "normal", [], {
-      activeSkill: skill,
-      skillContext: { userMessage: "test" },
+      activeAgent: skill,
+      agentContext: { userMessage: "test" },
     });
     const systemPromptSnippet = "C4 Model";
     const calIdx = prompt.indexOf("CONFIDENCE CALIBRATION FOR");
@@ -641,42 +641,42 @@ describe("BLOCK 4: Domain skill adds calibration that general mode lacks", () =>
   {
     const general = buildTruthSystemPrompt("chat", "normal", []);
 
-    const engSkill = getSkill("engineering-architect")!;
+    const engSkill = getAgent("engineering-architect")!;
     const engPrompt = buildTruthSystemPrompt("chat", "normal", [], {
-      activeSkill: engSkill, skillContext: { userMessage: "test" },
+      activeAgent: engSkill, agentContext: { userMessage: "test" },
     });
     assert(!general.includes("bulletproof"), "General: doesn't mention 'bulletproof'");
     assert(engPrompt.includes("bulletproof"), "Engineering: mentions 'bulletproof' as forbidden");
 
-    const finSkill = getSkill("financial-analyst")!;
+    const finSkill = getAgent("financial-analyst")!;
     const finPrompt = buildTruthSystemPrompt("chat", "normal", [], {
-      activeSkill: finSkill, skillContext: { userMessage: "test" },
+      activeAgent: finSkill, agentContext: { userMessage: "test" },
     });
     assert(!general.includes("forward-looking"), "General: doesn't mention 'forward-looking'");
     assert(finPrompt.includes("forward-looking"), "Finance: mentions 'forward-looking' as forbidden");
 
-    const mktSkill = getSkill("gtm-strategist")!;
+    const mktSkill = getAgent("gtm-strategist")!;
     const mktPrompt = buildTruthSystemPrompt("chat", "normal", [], {
-      activeSkill: mktSkill, skillContext: { userMessage: "test" },
+      activeAgent: mktSkill, agentContext: { userMessage: "test" },
     });
     assert(!general.includes("go viral"), "General: doesn't mention 'go viral'");
     assert(mktPrompt.includes("go viral"), "Marketing: mentions 'go viral' as forbidden");
 
-    const prodSkill = getSkill("product-manager")!;
+    const prodSkill = getAgent("product-manager")!;
     const prodPrompt = buildTruthSystemPrompt("chat", "normal", [], {
-      activeSkill: prodSkill, skillContext: { userMessage: "test" },
+      activeAgent: prodSkill, agentContext: { userMessage: "test" },
     });
     assert(prodPrompt.includes("users will love"), "Product: mentions 'users will love' as forbidden");
 
-    const leadSkill = getSkill("startup-ceo")!;
+    const leadSkill = getAgent("startup-ceo")!;
     const leadPrompt = buildTruthSystemPrompt("chat", "normal", [], {
-      activeSkill: leadSkill, skillContext: { userMessage: "test" },
+      activeAgent: leadSkill, agentContext: { userMessage: "test" },
     });
     assert(leadPrompt.includes("fix your culture"), "Leadership: mentions 'fix your culture' as forbidden");
 
-    const opsSkill = getSkill("senior-pm")!;
+    const opsSkill = getAgent("senior-pm")!;
     const opsPrompt = buildTruthSystemPrompt("chat", "normal", [], {
-      activeSkill: opsSkill, skillContext: { userMessage: "test" },
+      activeAgent: opsSkill, agentContext: { userMessage: "test" },
     });
     assert(opsPrompt.includes("story points"), "Operations: mentions 'story points' as forbidden");
   }
@@ -684,9 +684,9 @@ describe("BLOCK 4: Domain skill adds calibration that general mode lacks", () =>
   // Domain calibration is MORE SPECIFIC than general base rules
   {
     const general = buildTruthSystemPrompt("chat", "normal", []);
-    const engSkill = getSkill("security-auditor")!;
+    const engSkill = getAgent("security-auditor")!;
     const engPrompt = buildTruthSystemPrompt("chat", "normal", [], {
-      activeSkill: engSkill, skillContext: { userMessage: "test" },
+      activeAgent: engSkill, agentContext: { userMessage: "test" },
     });
 
     // General just says "Well-established fact" for High
@@ -710,10 +710,10 @@ describe("BLOCK 5: AURA_CORE base confidence rules preserved with every skill", 
     "Confidence: High|Medium|Low",
   ];
 
-  for (const [id, skill] of SKILL_REGISTRY) {
+  for (const [id, skill] of AGENT_REGISTRY) {
     const prompt = buildTruthSystemPrompt("chat", "normal", [], {
-      activeSkill: skill,
-      skillContext: { userMessage: "test" },
+      activeAgent: skill,
+      agentContext: { userMessage: "test" },
     });
 
     for (const rule of baseRules) {
@@ -723,9 +723,9 @@ describe("BLOCK 5: AURA_CORE base confidence rules preserved with every skill", 
 
   // Domain calibration ADDS to base — doesn't replace
   {
-    const skill = getSkill("financial-analyst")!;
+    const skill = getAgent("financial-analyst")!;
     const prompt = buildTruthSystemPrompt("chat", "normal", [], {
-      activeSkill: skill, skillContext: { userMessage: "test" },
+      activeAgent: skill, agentContext: { userMessage: "test" },
     });
 
     // Base AURA_CORE confidence
@@ -741,10 +741,10 @@ describe("BLOCK 5: AURA_CORE base confidence rules preserved with every skill", 
   // Non-negotiable principles survive with every mode + skill combo
   {
     const modes = ["chat", "research", "decision", "brainstorm", "explain"] as const;
-    const skill = getSkill("engineering-architect")!;
+    const skill = getAgent("engineering-architect")!;
     for (const m of modes) {
       const prompt = buildTruthSystemPrompt(m, "normal", [], {
-        activeSkill: skill, skillContext: { userMessage: "test" },
+        activeAgent: skill, agentContext: { userMessage: "test" },
       });
       assert(prompt.includes("TRUTH FIRST"), `Mode ${m} + skill: TRUTH FIRST preserved`);
       assert(prompt.includes("Never invent facts"), `Mode ${m} + skill: anti-hallucination preserved`);
@@ -754,11 +754,11 @@ describe("BLOCK 5: AURA_CORE base confidence rules preserved with every skill", 
 
   // Triage + skill: both triage AND base confidence rules present
   {
-    const skill = getSkill("startup-ceo")!;
+    const skill = getAgent("startup-ceo")!;
     const prompt = buildTruthSystemPrompt("chat", "normal", [], {
       isTriage: true,
-      activeSkill: skill,
-      skillContext: { userMessage: "I'm overwhelmed" },
+      activeAgent: skill,
+      agentContext: { userMessage: "I'm overwhelmed" },
     });
     assert(prompt.includes("TRIAGE MODE"), "Triage + skill: triage instructions present");
     assert(prompt.includes("High: Well-established fact"), "Triage + skill: base confidence present");

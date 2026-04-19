@@ -12,16 +12,16 @@
  * Run: npx tsx tests/skill-routing.test.ts
  */
 
-import { heuristicDomain, scoreDomains, composeChainedPrompt } from "../server/skill-router";
+import { heuristicDomain, scoreDomains, composeChainedPrompt } from "../server/agents/agent-router";
 import {
-  SKILL_REGISTRY,
-  getSkillsByDomain,
-  getSkill,
-  matchSkills,
-  getChainedSkills,
-  type SkillDefinition,
-} from "../server/skill-engine";
-import { buildTruthSystemPrompt, type SkillContext } from "../server/truth-engine";
+  AGENT_REGISTRY,
+  getAgentsByDomain,
+  getAgent,
+  matchAgentsByKeywords,
+  getChainedAgents,
+  type AgentDefinition,
+} from "../server/agents/agent-registry";
+import { buildTruthSystemPrompt, type AgentContext } from "../server/truth-engine";
 import {
   buildCalibrationInstruction,
   validateConfidenceInResponse,
@@ -381,73 +381,73 @@ describe("routeSkills() — heuristic path validation", () => {
 
   // Chain validation via skill definitions
   {
-    const architect = getSkill("engineering-architect")!;
+    const architect = getAgent("engineering-architect")!;
     assert(architect.chainsWith.includes("security-auditor"), "Architect chains with security-auditor");
     assert(architect.chainsWith.includes("engineering-code-reviewer"), "Architect chains with code-reviewer");
   }
 
   {
-    const gtm = getSkill("gtm-strategist")!;
+    const gtm = getAgent("gtm-strategist")!;
     assert(gtm.chainsWith.includes("content-strategist"), "GTM chains with content-strategist");
     assert(gtm.chainsWith.includes("product-manager"), "GTM chains with product-manager");
   }
 
   {
-    const financial = getSkill("financial-analyst")!;
+    const financial = getAgent("financial-analyst")!;
     assert(financial.chainsWith.includes("saas-metrics-coach"), "Financial chains with saas-metrics");
     assert(financial.chainsWith.includes("startup-ceo"), "Financial chains with startup-ceo");
   }
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
-// BLOCK 6: matchSkills() — keyword trigger matching
+// BLOCK 6: matchAgentsByKeywords() — keyword trigger matching
 // ═════════════════════════════════════════════════════════════════════════════
 
-describe("matchSkills() — keyword trigger matching from user messages", () => {
+describe("matchAgentsByKeywords() — keyword trigger matching from user messages", () => {
   {
-    const matches = matchSkills("Help me review this code and refactor the pull request");
+    const matches = matchAgentsByKeywords("Help me review this code and refactor the pull request");
     const ids = matches.map((s) => s.id);
     assert(ids.includes("engineering-code-reviewer"), "Code review message triggers code-reviewer skill");
   }
 
   {
-    const matches = matchSkills("I need help with security and OWASP vulnerabilities in our auth system");
+    const matches = matchAgentsByKeywords("I need help with security and OWASP vulnerabilities in our auth system");
     const ids = matches.map((s) => s.id);
     assert(ids.includes("security-auditor"), "Security + OWASP triggers security-auditor");
   }
 
   {
-    const matches = matchSkills("Write me a PRD with user stories and acceptance criteria");
+    const matches = matchAgentsByKeywords("Write me a PRD with user stories and acceptance criteria");
     const ids = matches.map((s) => s.id);
     assert(ids.includes("product-manager"), "PRD + user stories triggers product-manager");
   }
 
   {
-    const matches = matchSkills("What's a good MRR growth rate? Our churn is high and NRR is dropping");
+    const matches = matchAgentsByKeywords("What's a good MRR growth rate? Our churn is high and NRR is dropping");
     const ids = matches.map((s) => s.id);
     assert(ids.includes("saas-metrics-coach"), "MRR + churn + NRR triggers saas-metrics-coach");
   }
 
   {
-    const matches = matchSkills("Help me write better documentation and a runbook for the team");
+    const matches = matchAgentsByKeywords("Help me write better documentation and a runbook for the team");
     const ids = matches.map((s) => s.id);
     assert(ids.includes("technical-writer"), "Documentation + runbook triggers technical-writer");
   }
 
   {
-    const matches = matchSkills("How should I set OKRs for next quarter?");
+    const matches = matchAgentsByKeywords("How should I set OKRs for next quarter?");
     const ids = matches.map((s) => s.id);
     assert(ids.includes("okr-coach"), "OKR question triggers okr-coach");
   }
 
   // Generic message should match nothing or very few
   {
-    const matches = matchSkills("Tell me about the weather today");
+    const matches = matchAgentsByKeywords("Tell me about the weather today");
     assert(matches.length === 0, "Generic weather question triggers no skills");
   }
 
   {
-    const matches = matchSkills("Hello, how are you?");
+    const matches = matchAgentsByKeywords("Hello, how are you?");
     assert(matches.length === 0, "Greeting triggers no skills");
   }
 });
@@ -459,12 +459,12 @@ describe("matchSkills() — keyword trigger matching from user messages", () => 
 describe("AURA_CORE override protection — prompt injection safety", () => {
   // Valid skill passes without error
   {
-    const skill = getSkill("engineering-architect")!;
+    const skill = getAgent("engineering-architect")!;
     let threw = false;
     try {
       buildTruthSystemPrompt("chat", "normal", [], {
-        activeSkill: skill,
-        skillContext: { userMessage: "test" },
+        activeAgent: skill,
+        agentContext: { userMessage: "test" },
       });
     } catch {
       threw = true;
@@ -474,11 +474,11 @@ describe("AURA_CORE override protection — prompt injection safety", () => {
 
   // Sacred composition order: AURA_CORE → Mode → Memory → Triage → Skill (LAST)
   {
-    const skill = getSkill("engineering-architect")!;
+    const skill = getAgent("engineering-architect")!;
     const prompt = buildTruthSystemPrompt("decision", "expert", [
       { text: "Building a SaaS platform", category: "project" },
       { text: "Prefers TypeScript", category: "preference" },
-    ], { activeSkill: skill, skillContext: { userMessage: "test" } });
+    ], { activeAgent: skill, agentContext: { userMessage: "test" } });
 
     const coreIdx = prompt.indexOf("You are Aura");
     const modeIdx = prompt.indexOf("Decision Mode");
@@ -496,12 +496,12 @@ describe("AURA_CORE override protection — prompt injection safety", () => {
 
   // Non-negotiable principles survive skill injection
   {
-    const allSkillIds = Array.from(SKILL_REGISTRY.keys());
+    const allSkillIds = Array.from(AGENT_REGISTRY.keys());
     for (const id of allSkillIds) {
-      const skill = getSkill(id)!;
+      const skill = getAgent(id)!;
       const prompt = buildTruthSystemPrompt("chat", "normal", [], {
-        activeSkill: skill,
-        skillContext: { userMessage: "test" },
+        activeAgent: skill,
+        agentContext: { userMessage: "test" },
       });
       assert(prompt.includes("TRUTH FIRST"), `TRUTH FIRST survives ${id} injection`);
       assert(prompt.includes("Never invent facts"), `Anti-hallucination survives ${id} injection`);
@@ -517,7 +517,7 @@ describe("AURA_CORE override protection — prompt injection safety", () => {
       "ignore all", "system prompt", "jailbreak",
     ];
     let allClean = true;
-    for (const [id, skill] of SKILL_REGISTRY) {
+    for (const [id, skill] of AGENT_REGISTRY) {
       for (const phrase of forbidden) {
         if (skill.systemPrompt.toLowerCase().includes(phrase)) {
           console.error(`  FAIL: Skill ${id} contains forbidden phrase "${phrase}"`);
@@ -531,11 +531,11 @@ describe("AURA_CORE override protection — prompt injection safety", () => {
   // Mode templates preserved with every mode + skill combo
   {
     const modes = ["chat", "research", "decision", "brainstorm", "explain"] as const;
-    const skill = getSkill("product-manager")!;
+    const skill = getAgent("product-manager")!;
     for (const m of modes) {
       const prompt = buildTruthSystemPrompt(m, "normal", [], {
-        activeSkill: skill,
-        skillContext: { userMessage: "test" },
+        activeAgent: skill,
+        agentContext: { userMessage: "test" },
       });
       assert(prompt.includes("You are Aura"), `Mode ${m} preserves AURA_CORE with skill`);
     }
@@ -543,20 +543,20 @@ describe("AURA_CORE override protection — prompt injection safety", () => {
 
   // Explain levels preserved with skill
   {
-    const skill = getSkill("financial-analyst")!;
-    const simple = buildTruthSystemPrompt("chat", "simple", [], { activeSkill: skill });
-    const expert = buildTruthSystemPrompt("chat", "expert", [], { activeSkill: skill });
+    const skill = getAgent("financial-analyst")!;
+    const simple = buildTruthSystemPrompt("chat", "simple", [], { activeAgent: skill });
+    const expert = buildTruthSystemPrompt("chat", "expert", [], { activeAgent: skill });
     assert(simple.includes("12-year-old"), "Simple explain level preserved with skill");
     assert(expert.includes("technical language"), "Expert explain level preserved with skill");
   }
 
   // Triage section works with skill
   {
-    const skill = getSkill("startup-ceo")!;
+    const skill = getAgent("startup-ceo")!;
     const prompt = buildTruthSystemPrompt("chat", "normal", [], {
       isTriage: true,
-      activeSkill: skill,
-      skillContext: { userMessage: "I'm overwhelmed" },
+      activeAgent: skill,
+      agentContext: { userMessage: "I'm overwhelmed" },
     });
     assert(prompt.includes("TRIAGE MODE"), "Triage section present with skill active");
     assert(prompt.includes("ACTIVE DOMAIN EXPERTISE"), "Skill section still present with triage");
@@ -570,10 +570,10 @@ describe("AURA_CORE override protection — prompt injection safety", () => {
 describe("Token budget — prompt size constraints", () => {
   // Skill section stays reasonable (with calibration instructions)
   {
-    for (const [id, skill] of SKILL_REGISTRY) {
+    for (const [id, skill] of AGENT_REGISTRY) {
       const prompt = buildTruthSystemPrompt("chat", "normal", [], {
-        activeSkill: skill,
-        skillContext: { userMessage: "test" },
+        activeAgent: skill,
+        agentContext: { userMessage: "test" },
       });
       const skillStart = prompt.indexOf("ACTIVE DOMAIN EXPERTISE:");
       const skillSection = skillStart >= 0 ? prompt.slice(skillStart) : "";
@@ -596,8 +596,8 @@ describe("Token budget — prompt size constraints", () => {
       ["senior-pm", "scrum-master"],
     ];
     for (const [pId, sId] of pairs) {
-      const primary = getSkill(pId)!;
-      const secondary = getSkill(sId)!;
+      const primary = getAgent(pId)!;
+      const secondary = getAgent(sId)!;
       const chained = composeChainedPrompt(primary, secondary, { userMessage: "test" });
       assert(
         chained.length <= 900,
@@ -608,8 +608,8 @@ describe("Token budget — prompt size constraints", () => {
 
   // Chained prompts contain both skill names
   {
-    const primary = getSkill("engineering-architect")!;
-    const secondary = getSkill("security-auditor")!;
+    const primary = getAgent("engineering-architect")!;
+    const secondary = getAgent("security-auditor")!;
     const chained = composeChainedPrompt(primary, secondary, { userMessage: "test" });
     assert(chained.includes("PRIMARY EXPERTISE"), "Chained prompt has PRIMARY header");
     assert(chained.includes("SECONDARY LENS"), "Chained prompt has SECONDARY header");
@@ -621,7 +621,7 @@ describe("Token budget — prompt size constraints", () => {
   // Every skill's systemPrompt word count is reasonable
   {
     let allInRange = true;
-    for (const [id, skill] of SKILL_REGISTRY) {
+    for (const [id, skill] of AGENT_REGISTRY) {
       const words = skill.systemPrompt.split(/\s+/).length;
       if (words < 80 || words > 400) {
         console.error(`  FAIL: ${id} systemPrompt is ${words} words`);
@@ -634,7 +634,7 @@ describe("Token budget — prompt size constraints", () => {
   // Every skill has non-empty confidenceRules
   {
     let allValid = true;
-    for (const [id, skill] of SKILL_REGISTRY) {
+    for (const [id, skill] of AGENT_REGISTRY) {
       if (!skill.confidenceRules.high || !skill.confidenceRules.medium || !skill.confidenceRules.low) {
         console.error(`  FAIL: ${id} has empty confidenceRules`);
         allValid = false;
@@ -649,14 +649,14 @@ describe("Token budget — prompt size constraints", () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe("Skill registry — completeness and integrity", () => {
-  assert(SKILL_REGISTRY.size === 26, `Registry has exactly 26 skills (got ${SKILL_REGISTRY.size})`);
+  assert(AGENT_REGISTRY.size === 26, `Registry has exactly 26 skills (got ${AGENT_REGISTRY.size})`);
 
   // Domain counts
   const expectedCounts: Record<string, number> = {
     engineering: 5, marketing: 4, product: 3, finance: 3, leadership: 3, operations: 3, legal: 2, education: 2, health: 1,
   };
   for (const [domain, expected] of Object.entries(expectedCounts)) {
-    const actual = getSkillsByDomain(domain as any).length;
+    const actual = getAgentsByDomain(domain as any).length;
     assert(actual === expected, `${domain} has ${expected} skills (got ${actual})`);
   }
 
@@ -664,7 +664,7 @@ describe("Skill registry — completeness and integrity", () => {
   {
     const required = ["id", "name", "domain", "systemPrompt", "confidenceRules", "triggerKeywords", "chainsWith"];
     let allValid = true;
-    for (const [id, skill] of SKILL_REGISTRY) {
+    for (const [id, skill] of AGENT_REGISTRY) {
       for (const field of required) {
         if (!(skill as any)[field]) {
           console.error(`  FAIL: ${id} missing field: ${field}`);
@@ -681,16 +681,16 @@ describe("Skill registry — completeness and integrity", () => {
 
   // No duplicate skill IDs
   {
-    const ids = Array.from(SKILL_REGISTRY.keys());
+    const ids = Array.from(AGENT_REGISTRY.keys());
     assert(ids.length === new Set(ids).size, "No duplicate skill IDs");
   }
 
   // All chainsWith references are valid
   {
     let allValid = true;
-    for (const [id, skill] of SKILL_REGISTRY) {
+    for (const [id, skill] of AGENT_REGISTRY) {
       for (const chainId of skill.chainsWith) {
-        if (!SKILL_REGISTRY.has(chainId)) {
+        if (!AGENT_REGISTRY.has(chainId)) {
           console.error(`  FAIL: ${id} chains with non-existent "${chainId}"`);
           allValid = false;
         }
@@ -699,22 +699,22 @@ describe("Skill registry — completeness and integrity", () => {
     assert(allValid, "All chainsWith references point to valid skill IDs");
   }
 
-  // getChainedSkills returns actual SkillDefinition objects
+  // getChainedAgents returns actual AgentDefinition objects
   {
-    const chained = getChainedSkills("engineering-architect");
+    const chained = getChainedAgents("engineering-architect");
     assert(chained.length > 0, "engineering-architect has chained skills");
-    assert(chained.every((s) => s.id && s.name && s.domain), "Chained skills are full SkillDefinition objects");
+    assert(chained.every((s) => s.id && s.name && s.domain), "Chained skills are full AgentDefinition objects");
   }
 
-  // getSkill for non-existent ID returns undefined
+  // getAgent for non-existent ID returns undefined
   {
-    assert(getSkill("nonexistent-skill") === undefined, "Non-existent skill returns undefined");
-    assert(getSkill("") === undefined, "Empty string skill returns undefined");
+    assert(getAgent("nonexistent-skill") === undefined, "Non-existent skill returns undefined");
+    assert(getAgent("") === undefined, "Empty string skill returns undefined");
   }
 
   // Exactly 9 domains
   {
-    const domains = new Set(Array.from(SKILL_REGISTRY.values()).map((s) => s.domain));
+    const domains = new Set(Array.from(AGENT_REGISTRY.values()).map((s) => s.domain));
     assert(domains.size === 9, `Exactly 9 domains (got ${domains.size})`);
   }
 
@@ -722,7 +722,7 @@ describe("Skill registry — completeness and integrity", () => {
   {
     const kebabRegex = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
     let allKebab = true;
-    for (const id of SKILL_REGISTRY.keys()) {
+    for (const id of AGENT_REGISTRY.keys()) {
       if (!kebabRegex.test(id)) {
         console.error(`  FAIL: Skill ID "${id}" is not kebab-case`);
         allKebab = false;
@@ -881,10 +881,10 @@ describe("Confidence calibrator — response validation", () => {
 describe("Calibration integration — skill prompts include calibration", () => {
   // Every skill prompt now includes calibration instructions
   {
-    for (const [id, skill] of SKILL_REGISTRY) {
+    for (const [id, skill] of AGENT_REGISTRY) {
       const prompt = buildTruthSystemPrompt("chat", "normal", [], {
-        activeSkill: skill,
-        skillContext: { userMessage: "test" },
+        activeAgent: skill,
+        agentContext: { userMessage: "test" },
       });
       assert(
         prompt.includes("CONFIDENCE CALIBRATION FOR"),
@@ -895,10 +895,10 @@ describe("Calibration integration — skill prompts include calibration", () => 
 
   // Finance skill specifically includes assumptions requirement
   {
-    const skill = getSkill("financial-analyst")!;
+    const skill = getAgent("financial-analyst")!;
     const prompt = buildTruthSystemPrompt("chat", "normal", [], {
-      activeSkill: skill,
-      skillContext: { userMessage: "test" },
+      activeAgent: skill,
+      agentContext: { userMessage: "test" },
     });
     assert(
       prompt.includes("assumptions explicitly"),
@@ -908,10 +908,10 @@ describe("Calibration integration — skill prompts include calibration", () => 
 
   // Calibration appears AFTER the base confidence rules, not before
   {
-    const skill = getSkill("engineering-architect")!;
+    const skill = getAgent("engineering-architect")!;
     const prompt = buildTruthSystemPrompt("chat", "normal", [], {
-      activeSkill: skill,
-      skillContext: { userMessage: "test" },
+      activeAgent: skill,
+      agentContext: { userMessage: "test" },
     });
     const baseRulesIdx = prompt.indexOf("DOMAIN-SPECIFIC CONFIDENCE RULES");
     const calibrationIdx = prompt.indexOf("CONFIDENCE CALIBRATION FOR");
@@ -932,7 +932,7 @@ describe("User scenarios — end-to-end routing logic", () => {
     const scores = scoreDomains(msg);
     assert(scores.finance >= 1, "Fundraising → finance scores");
     assert(scores.leadership >= 1, "Investor approach → leadership scores");
-    const matches = matchSkills(msg);
+    const matches = matchAgentsByKeywords(msg);
     const skillNames = matches.map((s) => s.name);
     assert(
       matches.some((s) => s.domain === "finance" || s.domain === "leadership"),
@@ -943,7 +943,7 @@ describe("User scenarios — end-to-end routing logic", () => {
   // Scenario: Engineer asks about code review best practices
   {
     const msg = "What should I look for when doing a code review? I want to improve our PR process";
-    const matches = matchSkills(msg);
+    const matches = matchAgentsByKeywords(msg);
     assert(
       matches.some((s) => s.id === "engineering-code-reviewer"),
       "Code review question triggers code-reviewer"
@@ -962,7 +962,7 @@ describe("User scenarios — end-to-end routing logic", () => {
     const msg = "What's the best recipe for chocolate chip cookies?";
     const domain = heuristicDomain(msg);
     assert(domain === null, "Cookie recipe → no domain detected");
-    const matches = matchSkills(msg);
+    const matches = matchAgentsByKeywords(msg);
     assert(matches.length === 0, "Cookie recipe → no skills matched");
   }
 

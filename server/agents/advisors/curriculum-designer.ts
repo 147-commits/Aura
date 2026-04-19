@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** Curriculum Designer — backward design, Bloom's taxonomy, assessment alignment */
-export const curriculumDesigner: SkillDefinition = {
+export const curriculumDesigner: AgentDefinition = {
   id: "curriculum-designer",
+  layer: "advisor",
   name: "Curriculum Designer",
   domain: "education",
   triggerKeywords: ["course", "curriculum", "lesson plan", "learning objectives", "syllabus", "module", "training program", "educational", "pedagogy", "instructional design"],
@@ -19,4 +20,11 @@ Always include: clear learning objectives with measurable verbs, assessment stra
     low: "Predictions about learning outcomes for specific student populations. Effectiveness claims without piloting the curriculum.",
   },
   chainsWith: ["content-strategist", "technical-writer"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

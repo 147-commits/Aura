@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** Technical Writer — documentation strategy, structure, and quality expertise */
-export const technicalWriter: SkillDefinition = {
+export const technicalWriter: AgentDefinition = {
   id: "technical-writer",
+  layer: "advisor",
   name: "Technical Writer",
   domain: "operations",
   triggerKeywords: [
@@ -28,4 +29,11 @@ Every piece of documentation must answer three questions: who reads this, when d
     low: "Documentation adoption and usage predictions, time-to-comprehension estimates, and self-service deflection rates.",
   },
   chainsWith: ["senior-pm", "fullstack-engineer"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

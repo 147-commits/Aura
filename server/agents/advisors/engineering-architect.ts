@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** Senior Architect — system design and infrastructure expertise */
-export const engineeringArchitect: SkillDefinition = {
+export const engineeringArchitect: AgentDefinition = {
   id: "engineering-architect",
+  layer: "advisor",
   name: "Senior Architect",
   domain: "engineering",
   triggerKeywords: [
@@ -27,4 +28,11 @@ Anti-patterns to flag proactively: premature microservices adoption for teams un
     low: "Emerging technologies, unproven patterns at the user's specific scale, or predictions about future infrastructure needs beyond 18 months.",
   },
   chainsWith: ["security-auditor", "engineering-code-reviewer"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

@@ -1,9 +1,10 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** CTO Advisor — technical strategy, engineering org, and build-vs-buy expertise */
-export const ctoAdvisor: SkillDefinition = {
+export const ctoAdvisor: AgentDefinition = {
   id: "cto-advisor",
   name: "CTO Advisor",
+  layer: "advisor",
   domain: "leadership",
   triggerKeywords: [
     "CTO",
@@ -26,5 +27,12 @@ Always address: team skills gap between current state and proposed solution, tim
     medium: "Team structure recommendations — depends heavily on people, culture, and business context that varies significantly.",
     low: "Technology longevity predictions, hiring market forecasts, and specific productivity improvement estimates from org changes.",
   },
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
   chainsWith: ["startup-ceo", "engineering-architect"],
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

@@ -1,23 +1,27 @@
 /**
- * Skill Router — two-layer domain detection with skill chaining.
+ * Agent Router — two-layer domain detection with agent chaining.
  *
  * Design: fast heuristic path first, API call only when heuristics fail.
  * Cost target: < $0.0001 per routing decision.
  *
  * Layer 1: keyword scoring (free, instant)
  * Layer 2: gpt-4o-mini classification (only when Layer 1 returns null)
+ *
+ * Note: the router operates on the 9 "advisor domains" that currently have
+ * agents registered. AgentDomain is wider (14 values) to accommodate future
+ * pipeline agents, but until those domains have agents, they are not routable.
  */
 
 import OpenAI from "openai";
-import {
-  type SkillDomain,
-  type SkillDefinition,
-  getSkillsByDomain,
-} from "./skill-engine";
-import type { SkillContext } from "./truth-engine";
+import type {
+  AgentDefinition,
+  AdvisorDomain,
+} from "../../shared/agent-schema";
+import { getAgentsByDomain } from "./agent-registry";
+import type { AgentContext } from "../truth-engine";
 
-/** All routable domains */
-const DOMAINS: SkillDomain[] = [
+/** Domains the router actively considers (mirrors current advisor coverage). */
+const DOMAINS: AdvisorDomain[] = [
   "engineering",
   "marketing",
   "product",
@@ -30,7 +34,7 @@ const DOMAINS: SkillDomain[] = [
 ];
 
 /** Keyword scoring matrix — 2+ matches in a category triggers detection */
-const DOMAIN_KEYWORDS: Record<SkillDomain, string[]> = {
+const DOMAIN_KEYWORDS: Record<AdvisorDomain, string[]> = {
   engineering: [
     "api", "deploy", "database", "architecture", "microservice",
     "frontend", "backend", "kubernetes", "ci/cd", "typescript",
@@ -54,6 +58,7 @@ const DOMAIN_KEYWORDS: Record<SkillDomain, string[]> = {
   leadership: [
     "okr", "hiring", "culture", "strategy", "vision",
     "mission", "board", "investors", "co-founder", "org design",
+    "tech strategy", "cto", "build vs buy", "technical debt",
   ],
   operations: [
     "process", "workflow", "scrum", "kanban", "sprint",
@@ -84,13 +89,9 @@ const CHAINED_PROMPT_BUDGET = 900;
 
 // ── Layer 1: Heuristic Scoring ──────────────────────────────────────────────
 
-/**
- * Returns raw keyword match counts for each domain.
- * Used to detect multi-domain queries and rank domains by relevance.
- */
-export function scoreDomains(message: string): Record<SkillDomain, number> {
+export function scoreDomains(message: string): Record<AdvisorDomain, number> {
   const lower = message.toLowerCase();
-  const scores = {} as Record<SkillDomain, number>;
+  const scores = {} as Record<AdvisorDomain, number>;
   for (const domain of DOMAINS) {
     scores[domain] = DOMAIN_KEYWORDS[domain].filter((kw) =>
       lower.includes(kw)
@@ -99,13 +100,9 @@ export function scoreDomains(message: string): Record<SkillDomain, number> {
   return scores;
 }
 
-/**
- * Fast keyword-based domain detection — no API call.
- * Returns the highest-scoring domain if it meets the threshold, or null.
- */
-export function heuristicDomain(message: string): SkillDomain | null {
+export function heuristicDomain(message: string): AdvisorDomain | null {
   const scores = scoreDomains(message);
-  let best: SkillDomain | null = null;
+  let best: AdvisorDomain | null = null;
   let bestScore = 0;
 
   for (const domain of DOMAINS) {
@@ -116,23 +113,18 @@ export function heuristicDomain(message: string): SkillDomain | null {
   }
 
   if (best) {
-    console.log(`[skill-router] Layer 1 heuristic: ${best} (score: ${bestScore})`);
+    console.log(`[agent-router] Layer 1 heuristic: ${best} (score: ${bestScore})`);
   }
   return best;
 }
 
 // ── Layer 2: AI Classification ──────────────────────────────────────────────
 
-/**
- * AI-powered domain classification using gpt-4o-mini.
- * Only called when heuristic scoring fails (no domain reaches threshold).
- * Returns "general" as a typed string if classification fails.
- */
 export async function detectDomainAI(
   message: string,
   projectContext: string,
   openai: OpenAI
-): Promise<SkillDomain | "general"> {
+): Promise<AdvisorDomain | "general"> {
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -150,15 +142,15 @@ Message: ${message.slice(0, 300)}`,
     });
 
     const raw = response.choices[0]?.message?.content?.trim().toLowerCase() || "";
-    const valid: (SkillDomain | "general")[] = [...DOMAINS, "general"];
-    const result = valid.includes(raw as SkillDomain | "general")
-      ? (raw as SkillDomain | "general")
+    const valid: (AdvisorDomain | "general")[] = [...DOMAINS, "general"];
+    const result = valid.includes(raw as AdvisorDomain | "general")
+      ? (raw as AdvisorDomain | "general")
       : "general";
 
-    console.log(`[skill-router] Layer 2 AI: ${result} (raw: "${raw}")`);
+    console.log(`[agent-router] Layer 2 AI: ${result} (raw: "${raw}")`);
     return result;
   } catch (err) {
-    console.warn("[skill-router] Layer 2 AI failed, defaulting to general:", err);
+    console.warn("[agent-router] Layer 2 AI failed, defaulting to general:", err);
     return "general";
   }
 }
@@ -166,24 +158,12 @@ Message: ${message.slice(0, 300)}`,
 // ── Routing Result ──────────────────────────────────────────────────────────
 
 export interface RouteResult {
-  /** Primary domain detected */
-  primary: SkillDomain;
-  /** Secondary domain for chaining, or null if single-domain query */
-  secondary: SkillDomain | null;
-  /** Which layer made the primary decision */
+  primary: AdvisorDomain;
+  secondary: AdvisorDomain | null;
   layer: "heuristic" | "ai";
 }
 
-/**
- * Full routing pipeline: heuristic first, AI fallback, with chaining detection.
- *
- * 1. Score all domains via keyword matching
- * 2. If top 2 domains both meet threshold: return both (chained)
- * 3. If only one meets threshold: return primary only
- * 4. If none meet threshold: use AI for primary, no secondary
- * 5. Validate chaining: secondary must appear in primary skill's chainsWith
- */
-export async function routeSkills(
+export async function routeAgents(
   message: string,
   projectContext: string,
   memories: { text: string; category: string }[],
@@ -191,7 +171,6 @@ export async function routeSkills(
 ): Promise<RouteResult> {
   const scores = scoreDomains(message);
 
-  // Sort domains by score descending
   const ranked = DOMAINS
     .map((d) => ({ domain: d, score: scores[d] }))
     .sort((a, b) => b.score - a.score);
@@ -199,22 +178,19 @@ export async function routeSkills(
   const top = ranked[0];
   const runner = ranked[1];
 
-  // Both top domains meet threshold — potential chaining
   if (top.score >= MATCH_THRESHOLD && runner.score >= MATCH_THRESHOLD) {
     const secondary = validateChaining(top.domain, runner.domain);
     console.log(
-      `[skill-router] Multi-domain: ${top.domain}(${top.score}) + ${runner.domain}(${runner.score}), chained: ${secondary !== null}`
+      `[agent-router] Multi-domain: ${top.domain}(${top.score}) + ${runner.domain}(${runner.score}), chained: ${secondary !== null}`
     );
     return { primary: top.domain, secondary, layer: "heuristic" };
   }
 
-  // Single domain meets threshold
   if (top.score >= MATCH_THRESHOLD) {
-    console.log(`[skill-router] Single domain: ${top.domain}(${top.score})`);
+    console.log(`[agent-router] Single domain: ${top.domain}(${top.score})`);
     return { primary: top.domain, secondary: null, layer: "heuristic" };
   }
 
-  // No domain meets threshold — fall back to AI
   const memoryContext = memories
     .slice(0, 3)
     .map((m) => m.text)
@@ -224,7 +200,6 @@ export async function routeSkills(
   const aiDomain = await detectDomainAI(message, fullContext, openai);
 
   if (aiDomain === "general") {
-    // No specific domain detected — return engineering as safe default
     return { primary: "engineering", secondary: null, layer: "ai" };
   }
 
@@ -233,22 +208,16 @@ export async function routeSkills(
 
 // ── Chaining Validation ─────────────────────────────────────────────────────
 
-/**
- * Validates that the secondary domain can chain with the primary.
- * Returns the secondary domain if any skill in the primary domain
- * lists a skill from the secondary domain in its chainsWith array.
- * Returns null if chaining is not valid.
- */
 function validateChaining(
-  primaryDomain: SkillDomain,
-  secondaryDomain: SkillDomain
-): SkillDomain | null {
-  const primarySkills = getSkillsByDomain(primaryDomain);
-  const secondarySkills = getSkillsByDomain(secondaryDomain);
-  const secondaryIds = new Set(secondarySkills.map((s) => s.id));
+  primaryDomain: AdvisorDomain,
+  secondaryDomain: AdvisorDomain
+): AdvisorDomain | null {
+  const primaryAgents = getAgentsByDomain(primaryDomain);
+  const secondaryAgents = getAgentsByDomain(secondaryDomain);
+  const secondaryIds = new Set(secondaryAgents.map((a) => a.id));
 
-  for (const skill of primarySkills) {
-    if (skill.chainsWith.some((id) => secondaryIds.has(id))) {
+  for (const agent of primaryAgents) {
+    if (agent.chainsWith.some((id) => secondaryIds.has(id))) {
       return secondaryDomain;
     }
   }
@@ -257,15 +226,10 @@ function validateChaining(
 
 // ── Prompt Composition ──────────────────────────────────────────────────────
 
-/**
- * Composes a chained prompt from primary and secondary skills.
- * Primary prompt is preserved in full; secondary is truncated first
- * if the combined output exceeds the 900-character budget.
- */
 export function composeChainedPrompt(
-  primary: SkillDefinition,
-  secondary: SkillDefinition,
-  context: SkillContext
+  primary: AgentDefinition,
+  secondary: AgentDefinition,
+  _context: AgentContext
 ): string {
   const primaryHeader = `PRIMARY EXPERTISE — ${primary.name}:\n`;
   const secondaryHeader = `\n\nSECONDARY LENS — ${secondary.name}:\nAlso consider ${secondary.name} perspective:\n`;
@@ -280,7 +244,6 @@ export function composeChainedPrompt(
     return primaryHeader + primary.systemPrompt.slice(0, CHAINED_PROMPT_BUDGET - primaryHeader.length - 3) + "...";
   }
 
-  // Split budget: 60% primary, 40% secondary
   const primaryBudget = Math.floor(contentBudget * 0.6);
   const secondaryBudget = contentBudget - primaryBudget;
 

@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** Growth Marketer — funnel optimization and experimentation expertise */
-export const growthMarketer: SkillDefinition = {
+export const growthMarketer: AgentDefinition = {
   id: "growth-marketer",
+  layer: "advisor",
   name: "Growth Marketer",
   domain: "marketing",
   triggerKeywords: [
@@ -30,4 +31,11 @@ Every experiment must include: a clear hypothesis ("If we do X, metric Y will im
     low: "Specific growth rate predictions, viral coefficient estimates, and exact conversion improvements from untested changes.",
   },
   chainsWith: ["gtm-strategist", "saas-metrics-coach"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

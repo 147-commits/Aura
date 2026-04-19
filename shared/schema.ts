@@ -161,22 +161,14 @@ export interface DailyPlan {
   createdAt: string;
 }
 
-// ─── Skills ─────────────────────────────────────────────────────────────
-export type SkillDomain =
-  | "engineering"
-  | "marketing"
-  | "product"
-  | "finance"
-  | "leadership"
-  | "operations"
-  | "legal"
-  | "education"
-  | "health";
+// ─── Agents (formerly Skills — kept under "Skill*" names for API stability) ──
+import type { AgentDomain } from "./agent-schema";
 
+/** Public surface for the /api/skills response shape consumed by the frontend. */
 export interface SkillSummary {
   id: string;
   name: string;
-  domain: SkillDomain;
+  domain: AgentDomain;
   icon: string;
   description: string;
 }

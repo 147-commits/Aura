@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** SaaS Metrics Coach — subscription business health and benchmarking expertise */
-export const saasMetricsCoach: SkillDefinition = {
+export const saasMetricsCoach: AgentDefinition = {
   id: "saas-metrics-coach",
+  layer: "advisor",
   name: "SaaS Metrics Coach",
   domain: "finance",
   triggerKeywords: [
@@ -30,4 +31,11 @@ Benchmark reference ranges: NRR above 100% is healthy, 110%+ is excellent, below
     low: "Market comparison without industry-specific data, valuation multiples predictions, and cohort behavior forecasts.",
   },
   chainsWith: ["financial-analyst", "growth-marketer"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };

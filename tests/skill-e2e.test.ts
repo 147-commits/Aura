@@ -18,23 +18,23 @@ import {
   parseConfidence,
   parseActionItems,
   type ChatMode,
-  type SkillContext,
+  type AgentContext,
 } from "../server/truth-engine";
 import {
-  SKILL_REGISTRY,
-  getSkill,
-  getSkillsByDomain,
-  matchSkills,
-  getChainedSkills,
-  type SkillDefinition,
+  AGENT_REGISTRY,
+  getAgent,
+  getAgentsByDomain,
+  matchAgentsByKeywords,
+  getChainedAgents,
+  type AgentDefinition,
   type SkillDomain,
-} from "../server/skill-engine";
+} from "../server/agents/agent-registry";
 import {
   heuristicDomain,
   scoreDomains,
   composeChainedPrompt,
   type RouteResult,
-} from "../server/skill-router";
+} from "../server/agents/agent-router";
 import {
   validateConfidenceInResponse,
   buildCalibrationInstruction,
@@ -98,7 +98,7 @@ function createTestApp() {
     "technical-writer": "Documentation strategy, Diataxis framework, and content structure",
   };
 
-  function buildSkillSummary(skill: SkillDefinition) {
+  function buildSkillSummary(skill: AgentDefinition) {
     return {
       id: skill.id,
       name: skill.name,
@@ -115,14 +115,14 @@ function createTestApp() {
     const domains: SkillDomain[] = ["engineering", "marketing", "product", "finance", "leadership", "operations", "legal", "education", "health"];
     const grouped: Record<string, ReturnType<typeof buildSkillSummary>[]> = {};
     for (const domain of domains) {
-      grouped[domain] = getSkillsByDomain(domain).map(buildSkillSummary);
+      grouped[domain] = getAgentsByDomain(domain).map(buildSkillSummary);
     }
     res.json(grouped);
   });
 
   // GET /api/skills/:id
   app.get("/api/skills/:id", (req, res) => {
-    const skill = getSkill(req.params.id);
+    const skill = getAgent(req.params.id);
     if (!skill) return res.status(404).json({ error: "Skill not found" });
     res.json(buildSkillSummary(skill));
   });
@@ -133,40 +133,40 @@ function createTestApp() {
 // ─── Mock helpers ───────────────────────────────────────────────────────────
 
 function getAllSkillIds(): string[] {
-  return Array.from(SKILL_REGISTRY.keys());
+  return Array.from(AGENT_REGISTRY.keys());
 }
 
 function resolveSkill(activeSkillId: string | null, message: string, skillRoute: RouteResult) {
-  let activeSkill: SkillDefinition | undefined;
-  let skillContext: SkillContext | undefined;
+  let activeAgent: AgentDefinition | undefined;
+  let agentContext: AgentContext | undefined;
   let chainedPromptOverride: string | undefined;
   let detectedSkill: any = null;
   let error: string | null = null;
 
   if (activeSkillId) {
-    activeSkill = getSkill(activeSkillId);
-    if (!activeSkill) return { activeSkill: undefined, skillContext: undefined, chainedPromptOverride: undefined, detectedSkill: null, error: "Unknown skill ID" };
-    skillContext = { userMessage: message, chainedSkillIds: activeSkill.chainsWith };
-    detectedSkill = { primary: activeSkill.domain, secondary: null, wasAutoDetected: false, skillName: activeSkill.name };
+    activeAgent = getAgent(activeSkillId);
+    if (!activeAgent) return { activeAgent: undefined, agentContext: undefined, chainedPromptOverride: undefined, detectedSkill: null, error: "Unknown skill ID" };
+    agentContext = { userMessage: message, chainedAgentIds: activeAgent.chainsWith };
+    detectedSkill = { primary: activeAgent.domain, secondary: null, wasAutoDetected: false, skillName: activeAgent.name };
   } else if (skillRoute.secondary) {
-    const pSkills = getSkillsByDomain(skillRoute.primary);
-    const sSkills = getSkillsByDomain(skillRoute.secondary);
+    const pSkills = getAgentsByDomain(skillRoute.primary);
+    const sSkills = getAgentsByDomain(skillRoute.secondary);
     if (pSkills.length > 0 && sSkills.length > 0) {
-      activeSkill = pSkills[0];
-      skillContext = { userMessage: message, chainedSkillIds: activeSkill.chainsWith };
-      chainedPromptOverride = composeChainedPrompt(activeSkill, sSkills[0], skillContext);
-      detectedSkill = { primary: skillRoute.primary, secondary: skillRoute.secondary, wasAutoDetected: true, skillName: `${activeSkill.name} + ${sSkills[0].name}` };
+      activeAgent = pSkills[0];
+      agentContext = { userMessage: message, chainedAgentIds: activeAgent.chainsWith };
+      chainedPromptOverride = composeChainedPrompt(activeAgent, sSkills[0], agentContext);
+      detectedSkill = { primary: skillRoute.primary, secondary: skillRoute.secondary, wasAutoDetected: true, skillName: `${activeAgent.name} + ${sSkills[0].name}` };
     }
   } else if (skillRoute.primary) {
-    const dSkills = getSkillsByDomain(skillRoute.primary);
+    const dSkills = getAgentsByDomain(skillRoute.primary);
     if (dSkills.length > 0) {
-      activeSkill = dSkills[0];
-      skillContext = { userMessage: message, chainedSkillIds: activeSkill.chainsWith };
-      detectedSkill = { primary: skillRoute.primary, secondary: null, wasAutoDetected: true, skillName: activeSkill.name };
+      activeAgent = dSkills[0];
+      agentContext = { userMessage: message, chainedAgentIds: activeAgent.chainsWith };
+      detectedSkill = { primary: skillRoute.primary, secondary: null, wasAutoDetected: true, skillName: activeAgent.name };
     }
   }
 
-  return { activeSkill, skillContext, chainedPromptOverride, detectedSkill, error };
+  return { activeAgent, agentContext, chainedPromptOverride, detectedSkill, error };
 }
 
 function buildFullPrompt(mode: ChatMode, memory: { text: string; category: string }[], resolved: ReturnType<typeof resolveSkill>): string {
@@ -176,8 +176,8 @@ function buildFullPrompt(mode: ChatMode, memory: { text: string; category: strin
   }
   return buildTruthSystemPrompt(mode, "normal", memory, {
     isTriage: false,
-    activeSkill: resolved.activeSkill,
-    skillContext: resolved.skillContext,
+    activeAgent: resolved.activeAgent,
+    agentContext: resolved.agentContext,
   });
 }
 
@@ -294,7 +294,7 @@ async function runAllFlows() {
     const resolved = resolveSkill("engineering-architect", msg, { primary: "engineering", secondary: null, layer: "heuristic" });
 
     assert(resolved.error === null, "No error");
-    assert(resolved.activeSkill?.id === "engineering-architect", "Skill resolved");
+    assert(resolved.activeAgent?.id === "engineering-architect", "Skill resolved");
     assert(resolved.detectedSkill?.skillName === "Senior Architect", "Skill name");
     assert(resolved.detectedSkill?.wasAutoDetected === false, "Manual, not auto");
 
@@ -330,7 +330,7 @@ async function runAllFlows() {
     const route: RouteResult = { primary: "marketing", secondary: null, layer: "heuristic" };
     const resolved = resolveSkill(null, msg, route);
 
-    assert(resolved.activeSkill?.id === "gtm-strategist", "Auto: gtm-strategist");
+    assert(resolved.activeAgent?.id === "gtm-strategist", "Auto: gtm-strategist");
     assert(resolved.detectedSkill?.wasAutoDetected === true, "Auto-detected");
     assert(resolved.detectedSkill?.skillName === "GTM Strategist", "Skill name");
 
@@ -339,8 +339,8 @@ async function runAllFlows() {
     assert(prompt.includes("CONFIDENCE CALIBRATION FOR MARKETING"), "Marketing calibration");
     assert(prompt.includes("TRUTH FIRST"), "Truth-first preserved");
 
-    const matches = matchSkills(msg);
-    assert(matches.some((s) => s.id === "gtm-strategist"), "matchSkills finds gtm-strategist");
+    const matches = matchAgentsByKeywords(msg);
+    assert(matches.some((s) => s.id === "gtm-strategist"), "matchAgentsByKeywords finds gtm-strategist");
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -403,17 +403,17 @@ async function runAllFlows() {
     };
     let threw = false;
     try {
-      buildTruthSystemPrompt("chat", "normal", [], { activeSkill: evil, skillContext: { userMessage: "test" } });
+      buildTruthSystemPrompt("chat", "normal", [], { activeAgent: evil, agentContext: { userMessage: "test" } });
     } catch (e: any) {
       threw = true;
-      assert(e.message === "Invalid skill injection blocked", "Correct error message");
+      assert(e.message === "Invalid agent injection blocked", "Correct error message");
     }
     assert(threw, "Malicious systemPrompt blocked");
 
     // All 18 real skills pass
     let allPass = true;
-    for (const [id, skill] of SKILL_REGISTRY) {
-      try { buildTruthSystemPrompt("chat", "normal", [], { activeSkill: skill }); }
+    for (const [id, skill] of AGENT_REGISTRY) {
+      try { buildTruthSystemPrompt("chat", "normal", [], { activeAgent: skill }); }
       catch { allPass = false; console.error(`  FAIL: ${id} blocked`); }
     }
     assert(allPass, "All 18 real skills pass validation");
@@ -430,7 +430,7 @@ async function runAllFlows() {
     assert(resolved.error === null, "No error on fallback");
 
     // Fully degraded — no skill
-    const noSkill = { activeSkill: undefined, skillContext: undefined, chainedPromptOverride: undefined, detectedSkill: null, error: null };
+    const noSkill = { activeAgent: undefined, agentContext: undefined, chainedPromptOverride: undefined, detectedSkill: null, error: null };
     const prompt = buildFullPrompt("chat", [], noSkill as any);
     assert(prompt.includes("You are Aura"), "Degraded: AURA_CORE");
     assert(!prompt.includes("ACTIVE DOMAIN EXPERTISE"), "Degraded: no skill section");
@@ -444,9 +444,9 @@ async function runAllFlows() {
   // ═══════════════════════════════════════════════════════════════════════════
 
   await flow("6: Full lifecycle — every skill end-to-end", () => {
-    for (const [id, skill] of SKILL_REGISTRY) {
+    for (const [id, skill] of AGENT_REGISTRY) {
       const resolved = resolveSkill(id, "test question", { primary: skill.domain, secondary: null, layer: "heuristic" });
-      assert(resolved.activeSkill?.id === id, `${id}: resolved`);
+      assert(resolved.activeAgent?.id === id, `${id}: resolved`);
 
       const prompt = buildFullPrompt("chat", [], resolved);
       assert(prompt.includes("You are Aura"), `${id}: AURA_CORE`);
@@ -464,8 +464,8 @@ async function runAllFlows() {
   // ═══════════════════════════════════════════════════════════════════════════
 
   await flow("7: Chain validation — all declared pairs compose", () => {
-    for (const [id, skill] of SKILL_REGISTRY) {
-      for (const chainedSkill of getChainedSkills(id)) {
+    for (const [id, skill] of AGENT_REGISTRY) {
+      for (const chainedSkill of getChainedAgents(id)) {
         const composed = composeChainedPrompt(skill, chainedSkill, { userMessage: "test" });
         assert(composed.length > 0 && composed.length <= 900, `${id}→${chainedSkill.id}: budget OK (${composed.length})`);
         assert(composed.includes("PRIMARY EXPERTISE"), `${id}→${chainedSkill.id}: PRIMARY`);

@@ -1,8 +1,9 @@
-import type { SkillDefinition } from "../skill-engine";
+import type { AgentDefinition } from "../../../shared/agent-schema";
 
 /** UX Researcher — user research methodology and design insight expertise */
-export const uxResearcher: SkillDefinition = {
+export const uxResearcher: AgentDefinition = {
   id: "ux-researcher",
+  layer: "advisor",
   name: "UX Researcher",
   domain: "product",
   triggerKeywords: [
@@ -29,4 +30,11 @@ Critical distinction: always separate what users SAY (attitudinal data — inter
     low: "User behavior predictions without testing, adoption forecasts for new interaction patterns, emotional response predictions.",
   },
   chainsWith: ["product-manager", "gtm-strategist"],
+  phases: [],
+  inputSchema: "ChatInput",
+  outputSchema: "ChatOutput",
+  modelTier: "skill",
+  estimatedTokens: 2000,
+  escalatesTo: [],
+  promptVersion: "1.0.0",
 };
